@@ -7,6 +7,7 @@ let hintTimeout = null;
 
 // === Drag & Drop State ===
 let dragState = null; // { fromCol, cardIndex, cards, ghost, offsetX, offsetY }
+let justDragged = false;
 
 // === Inicialização ===
 function startGame(numSuits) {
@@ -185,8 +186,8 @@ function createCardElement(card, colIdx, cardIdx) {
       el.style.cursor = 'grab';
     }
 
-    // Double click para auto-mover
-    el.addEventListener('dblclick', () => handleDoubleClick(colIdx, cardIdx));
+    // Click para auto-mover
+    el.addEventListener('click', () => handleCardClick(colIdx, cardIdx));
   }
 
   return el;
@@ -267,6 +268,9 @@ function handleDragEnd(e) {
     el.classList.remove('drop-target');
   });
   dragState = null;
+  // Evitar que o click dispare após um drag
+  justDragged = true;
+  setTimeout(() => { justDragged = false; }, 0);
 }
 
 function handleDragOver(e) {
@@ -319,8 +323,10 @@ function handleDrop(e) {
   dragState = null;
 }
 
-// === Double Click Auto-Move ===
-function handleDoubleClick(colIdx, cardIdx) {
+// === Click Auto-Move ===
+function handleCardClick(colIdx, cardIdx) {
+  // Ignorar click após drag
+  if (justDragged) return;
   // Tentar mover para a melhor coluna disponível
   if (!game.canPickUp(colIdx, cardIdx)) return;
 
