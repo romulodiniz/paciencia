@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paciência Spider</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Tela Inicial -->
+  <div id="menu-screen" class="screen">
+    <div class="menu-container">
+      <h1>♠ Paciência Spider</h1>
+      <p class="subtitle">Escolha a dificuldade</p>
+      <div class="difficulty-buttons">
+        <button class="btn btn-easy" onclick="startGame(1)">
+          <span class="btn-icon">♠</span>
+          <span class="btn-label">1 Naipe</span>
+          <span class="btn-desc">Fácil</span>
+        </button>
+        <button class="btn btn-medium" onclick="startGame(2)">
+          <span class="btn-icon">♠♥</span>
+          <span class="btn-label">2 Naipes</span>
+          <span class="btn-desc">Médio</span>
+        </button>
+        <button class="btn btn-hard" onclick="startGame(4)">
+          <span class="btn-icon">♠♥♦♣</span>
+          <span class="btn-label">4 Naipes</span>
+          <span class="btn-desc">Difícil</span>
+        </button>
+      </div>
+      <button class="btn btn-stats" onclick="showStats()">
+        📊 Estatísticas
+      </button>
+    </div>
+  </div>
+
+  <!-- Tela do Jogo -->
+  <div id="game-screen" class="screen hidden">
+    <!-- Barra Superior -->
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <button class="toolbar-btn" onclick="showMenu()"><span class="tb-icon">✕</span><span class="tb-label">Menu</span></button>
+        <button class="toolbar-btn" onclick="confirmNewGame()"><span class="tb-icon">⟳</span><span class="tb-label">Novo</span></button>
+        <button class="toolbar-btn" onclick="restartGame()"><span class="tb-icon">↺</span><span class="tb-label">Reiniciar</span></button>
+        <button class="toolbar-btn" onclick="undoMove()"><span class="tb-icon">↩</span><span class="tb-label">Desfazer</span></button>
+        <button class="toolbar-btn" onclick="showHint()"><span class="tb-icon">?</span><span class="tb-label">Dica</span></button>
+      </div>
+      <div class="top-bar-center">
+        <div class="info-item">
+          <span class="info-label">Pontos</span>
+          <span id="score" class="info-value">500</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Movimentos</span>
+          <span id="moves" class="info-value">0</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Tempo</span>
+          <span id="timer" class="info-value">00:00</span>
+        </div>
+      </div>
+      <div class="top-bar-right">
+        <div class="completed-area" id="completed-area"></div>
+        <div class="stock-area" id="stock-area" onclick="dealCards()" title="Distribuir cartas"></div>
+      </div>
+    </div>
+
+    <!-- Tableau -->
+    <div class="tableau" id="tableau"></div>
+  </div>
+
+  <!-- Modal de Estatísticas -->
+  <div id="stats-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Estatísticas</h2>
+        <button class="modal-close" onclick="closeStats()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="stats-tabs">
+          <button class="stats-tab active" onclick="switchStatsTab(1)">1 Naipe</button>
+          <button class="stats-tab" onclick="switchStatsTab(2)">2 Naipes</button>
+          <button class="stats-tab" onclick="switchStatsTab(4)">4 Naipes</button>
+        </div>
+        <div id="stats-content" class="stats-grid"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger" onclick="confirmResetStats()">Resetar Estatísticas</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Vitória -->
+  <div id="win-modal" class="modal hidden">
+    <div class="modal-content win-content">
+      <h2>🎉 Parabéns!</h2>
+      <p>Você venceu!</p>
+      <div id="win-stats" class="win-stats"></div>
+      <div class="win-buttons">
+        <button class="btn btn-primary" onclick="confirmNewGame()">Jogar Novamente</button>
+        <button class="btn btn-secondary" onclick="showMenu()">Menu Principal</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/card.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
