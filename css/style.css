@@ -269,7 +269,7 @@ body {
   flex: 1;
   max-width: 120px;
   min-width: 70px;
-  min-height: 170px;
+  min-height: 120px;
   position: relative;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.1);
@@ -290,9 +290,9 @@ body {
 .card {
   position: absolute;
   width: 100%;
-  aspect-ratio: 5 / 7;
+  aspect-ratio: 5 / 6;
   height: auto;
-  min-height: 140px;
+  min-height: 98px;
   border-radius: 10px;
   cursor: default;
   transition: box-shadow 0.15s;
@@ -341,9 +341,9 @@ body {
   display: flex;
   flex-direction: row;
   align-items: baseline;
-  gap: 3px;
+  gap: 2px;
   line-height: 1;
-  padding: 8px 10px;
+  padding: 5px 7px;
   width: fit-content;
 }
 
@@ -356,13 +356,13 @@ body {
 }
 
 .card-value {
-  font-size: 2.2rem;
+  font-size: 1.6rem;
   font-weight: 700;
   letter-spacing: -1px;
 }
 
 .card-suit-small {
-  font-size: 1.4rem;
+  font-size: 1rem;
   line-height: 1;
 }
 
@@ -371,10 +371,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 5rem;
+  font-size: 3.5rem;
   flex: 1;
   pointer-events: none;
-  margin-top: -8px;
+  margin-top: -6px;
 }
 
 .card-black {
@@ -632,25 +632,25 @@ body {
   }
 
   .card {
-    min-height: 100px;
+    min-height: 75px;
     border-radius: 7px;
   }
 
   .card-value {
-    font-size: 1.7rem;
+    font-size: 1.3rem;
   }
 
   .card-suit-small {
-    font-size: 1.1rem;
+    font-size: 0.85rem;
   }
 
   .card-corner {
-    padding: 6px 7px;
+    padding: 4px 5px;
     gap: 2px;
   }
 
   .card-center {
-    font-size: 3.5rem;
+    font-size: 2.5rem;
   }
 
   .top-bar-center {
@@ -677,24 +677,24 @@ body {
 
 @media (max-width: 500px) {
   .card {
-    min-height: 80px;
+    min-height: 60px;
   }
 
   .card-value {
-    font-size: 1.3rem;
+    font-size: 1.1rem;
   }
 
   .card-suit-small {
-    font-size: 0.85rem;
+    font-size: 0.7rem;
   }
 
   .card-center {
-    font-size: 2.5rem;
+    font-size: 1.8rem;
   }
 
   .card-corner {
-    padding: 4px 5px;
-    gap: 2px;
+    padding: 3px 4px;
+    gap: 1px;
   }
 
   .top-bar {

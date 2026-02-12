@@ -111,7 +111,7 @@ function renderTableau() {
 
     if (col.length === 0) {
       // Coluna vazia — área de drop
-      colEl.style.minHeight = '160px';
+      colEl.style.minHeight = '120px';
     }
 
     for (let cardIdx = 0; cardIdx < col.length; cardIdx++) {
@@ -142,13 +142,13 @@ function renderTableau() {
 }
 
 function getCardHeight() {
-  // Calcular baseado na largura real da coluna (aspect-ratio 5:7)
+  // Calcular baseado na largura real da coluna (aspect-ratio 5:6)
   const col = document.querySelector('.column');
   if (col) {
     const colWidth = col.offsetWidth;
-    return Math.max(colWidth * 7 / 5, 140);
+    return Math.max(colWidth * 6 / 5, 98);
   }
-  return window.innerWidth <= 500 ? 110 : (window.innerWidth <= 800 ? 140 : 170);
+  return window.innerWidth <= 500 ? 60 : (window.innerWidth <= 800 ? 75 : 98);
 }
 
 function calculateCardOffset(col, cardIdx) {
@@ -156,9 +156,9 @@ function calculateCardOffset(col, cardIdx) {
   let offset = 0;
   for (let i = 0; i < cardIdx; i++) {
     if (isSmall) {
-      offset += col[i].faceUp ? 32 : 14;
+      offset += col[i].faceUp ? 26 : 8;
     } else {
-      offset += col[i].faceUp ? 48 : 20;
+      offset += col[i].faceUp ? 38 : 12;
     }
   }
   return offset;

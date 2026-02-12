@@ -187,46 +187,22 @@ class SpiderGame {
     return true;
   }
 
-  // Distribui cartas do estoque (pula colunas vazias)
+  // Distribui cartas do estoque (uma por coluna, inclusive vazias)
   dealFromStock() {
     if (this.stock.length === 0) return { dealt: false, reason: 'empty' };
 
-    // Retirar até 10 cartas do estoque (uma por coluna)
-    const numToPop = Math.min(10, this.stock.length);
-    const poppedCards = [];
-    for (let i = 0; i < numToPop; i++) {
-      poppedCards.push(this.stock.pop());
-    }
-
-    const dealtCards = [];    // cartas colocadas nas colunas
-    const returnedCards = []; // cartas para colunas vazias, devolvidas ao estoque
-
-    for (let i = 0; i < poppedCards.length; i++) {
-      const card = poppedCards[i];
-      if (this.tableau[i].length > 0) {
-        card.faceUp = true;
-        this.tableau[i].push(card);
-        dealtCards.push({ col: i, card });
-      } else {
-        // Coluna vazia: carta volta para o topo do estoque
-        returnedCards.push({ col: i, card });
-      }
-    }
-
-    // Devolver cartas de colunas vazias ao topo do estoque
-    // (primeira devolvida fica no topo para ser distribuída primeiro na próxima vez)
-    for (let i = returnedCards.length - 1; i >= 0; i--) {
-      this.stock.push(returnedCards[i].card);
-    }
-
-    if (dealtCards.length === 0) {
-      return { dealt: false, reason: 'empty' };
+    const dealtCards = [];
+    for (let i = 0; i < 10; i++) {
+      if (this.stock.length === 0) break;
+      const card = this.stock.pop();
+      card.faceUp = true;
+      this.tableau[i].push(card);
+      dealtCards.push({ col: i, card });
     }
 
     this.history.push({
       type: 'deal',
-      dealtCards,
-      returnedCards
+      dealtCards
     });
 
     this.moves++;
@@ -273,22 +249,11 @@ class SpiderGame {
       this.moves--;
       this.score = Math.min(500, this.score + 1);
     } else if (action.type === 'deal') {
-      // Remover cartas devolvidas do topo do estoque
-      const returnedCards = action.returnedCards || [];
-      for (let i = 0; i < returnedCards.length; i++) {
-        this.stock.pop();
-      }
-
-      // Remover cartas distribuídas das colunas (ordem reversa)
+      // Devolver cartas distribuídas ao estoque (ordem reversa)
       for (let i = action.dealtCards.length - 1; i >= 0; i--) {
-        this.tableau[action.dealtCards[i].col].pop();
-      }
-
-      // Reconstruir a ordem original e devolver ao estoque
-      const allEntries = [...action.dealtCards, ...returnedCards].sort((a, b) => a.col - b.col);
-      for (let i = allEntries.length - 1; i >= 0; i--) {
-        allEntries[i].card.faceUp = false;
-        this.stock.push(allEntries[i].card);
+        const card = this.tableau[action.dealtCards[i].col].pop();
+        card.faceUp = false;
+        this.stock.push(card);
       }
 
       this.moves--;
@@ -463,22 +428,10 @@ class SpiderGame {
   }
 
   _solverDeal(state) {
-    const numToPop = Math.min(10, state.stock.length);
-    const popped = [];
-    for (let i = 0; i < numToPop; i++) {
-      popped.push(state.stock.pop());
-    }
-    const returned = [];
-    for (let i = 0; i < popped.length; i++) {
-      if (state.tableau[i].length > 0) {
-        popped[i].faceUp = true;
-        state.tableau[i].push(popped[i]);
-      } else {
-        returned.push(popped[i]);
-      }
-    }
-    for (let i = returned.length - 1; i >= 0; i--) {
-      state.stock.push(returned[i]);
+    for (let i = 0; i < 10 && state.stock.length > 0; i++) {
+      const card = state.stock.pop();
+      card.faceUp = true;
+      state.tableau[i].push(card);
     }
   }
 
