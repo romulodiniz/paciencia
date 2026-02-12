@@ -11,14 +11,18 @@ let justDragged = false;
 
 // === Inicialização ===
 function startGame(numSuits) {
-  game.newGame(numSuits);
-  stats.recordGameStart(numSuits);
-
   document.getElementById('menu-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
 
-  render();
-  startTimerUpdate();
+  showToast('Gerando jogo vencível...');
+
+  // Usar setTimeout para permitir que a UI atualize antes do solver rodar
+  setTimeout(() => {
+    game.newGame(numSuits);
+    stats.recordGameStart(numSuits);
+    render();
+    startTimerUpdate();
+  }, 50);
 }
 
 function showMenu() {

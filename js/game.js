@@ -17,8 +17,13 @@ class SpiderGame {
   newGame(numSuits) {
     this.numSuits = numSuits;
 
-    const deck = new Deck(numSuits);
-    deck.shuffle();
+    const MAX_DEALS = 50;
+    let deck;
+    for (let attempt = 0; attempt < MAX_DEALS; attempt++) {
+      deck = new Deck(numSuits);
+      deck.shuffle();
+      if (this._checkWinnable(deck.cards)) break;
+    }
 
     // Salvar a ordem das cartas para poder reiniciar
     this.savedDealOrder = deck.cards.map(c => ({ suit: c.suit, value: c.value }));
@@ -347,6 +352,185 @@ class SpiderGame {
   // Verifica vitória
   checkWin() {
     return this.completed.length === 8;
+  }
+
+  // === Verificação de vencibilidade ===
+
+  _checkWinnable(cards) {
+    const TRIALS = 25;
+    const MAX_MOVES = 500;
+    for (let t = 0; t < TRIALS; t++) {
+      if (this._trySolve(cards, t, MAX_MOVES)) return true;
+    }
+    return false;
+  }
+
+  _createSolverState(cards) {
+    const tableau = Array.from({ length: 10 }, () => []);
+    let idx = 0;
+    for (let col = 0; col < 10; col++) {
+      const num = col < 4 ? 6 : 5;
+      for (let i = 0; i < num; i++) {
+        tableau[col].push({
+          suit: cards[idx].suit,
+          value: cards[idx].value,
+          faceUp: i === num - 1
+        });
+        idx++;
+      }
+    }
+    const stock = [];
+    for (let i = idx; i < cards.length; i++) {
+      stock.push({ suit: cards[i].suit, value: cards[i].value, faceUp: false });
+    }
+    return { tableau, stock, completed: 0 };
+  }
+
+  _solverFlipTop(col) {
+    if (col.length > 0 && !col[col.length - 1].faceUp) {
+      col[col.length - 1].faceUp = true;
+    }
+  }
+
+  _solverRemoveSequences(state) {
+    let found = true;
+    while (found) {
+      found = false;
+      for (let c = 0; c < 10; c++) {
+        const col = state.tableau[c];
+        if (col.length < 13) continue;
+        const start = col.length - 13;
+        if (col[start].value !== 13) continue;
+        const suit = col[start].suit;
+        let valid = true;
+        for (let i = 0; i < 13; i++) {
+          const card = col[start + i];
+          if (!card.faceUp || card.suit !== suit || card.value !== 13 - i) {
+            valid = false;
+            break;
+          }
+        }
+        if (valid) {
+          col.splice(start, 13);
+          state.completed++;
+          this._solverFlipTop(col);
+          found = true;
+          break;
+        }
+      }
+    }
+  }
+
+  _solverGetMoves(state) {
+    const moves = [];
+    const { tableau } = state;
+    for (let from = 0; from < 10; from++) {
+      const col = tableau[from];
+      for (let ci = col.length - 1; ci >= 0; ci--) {
+        if (!col[ci].faceUp) break;
+        if (ci < col.length - 1) {
+          if (col[ci].suit !== col[ci + 1].suit || col[ci].value !== col[ci + 1].value + 1) break;
+        }
+        const card = col[ci];
+        const numCards = col.length - ci;
+        for (let to = 0; to < 10; to++) {
+          if (from === to) continue;
+          const target = tableau[to];
+          if (target.length === 0) {
+            if (ci === 0) continue; // mover coluna inteira para vazia não ajuda
+            let score = 10;
+            if (card.value === 13) score += 15;
+            if (ci > 0 && !col[ci - 1].faceUp) score += 40;
+            moves.push({ from, to, ci, score });
+          } else {
+            const top = target[target.length - 1];
+            if (top.value !== card.value + 1) continue;
+            let score = 0;
+            if (top.suit === card.suit) {
+              score += 100;
+            } else {
+              score += 30;
+            }
+            if (ci > 0 && !col[ci - 1].faceUp) score += 50;
+            score += numCards * 3;
+            moves.push({ from, to, ci, score });
+          }
+        }
+      }
+    }
+    moves.sort((a, b) => b.score - a.score);
+    return moves;
+  }
+
+  _solverDeal(state) {
+    const numToPop = Math.min(10, state.stock.length);
+    const popped = [];
+    for (let i = 0; i < numToPop; i++) {
+      popped.push(state.stock.pop());
+    }
+    const returned = [];
+    for (let i = 0; i < popped.length; i++) {
+      if (state.tableau[i].length > 0) {
+        popped[i].faceUp = true;
+        state.tableau[i].push(popped[i]);
+      } else {
+        returned.push(popped[i]);
+      }
+    }
+    for (let i = returned.length - 1; i >= 0; i--) {
+      state.stock.push(returned[i]);
+    }
+  }
+
+  _trySolve(cards, trial, maxMoves) {
+    const state = this._createSolverState(cards);
+    let seed = trial * 997 + 13;
+    let moveCount = 0;
+    let noProgressCount = 0;
+
+    while (moveCount < maxMoves && state.completed < 8) {
+      this._solverRemoveSequences(state);
+      if (state.completed >= 8) return true;
+
+      const moves = this._solverGetMoves(state);
+
+      if (moves.length === 0) {
+        if (state.stock.length > 0) {
+          this._solverDeal(state);
+          moveCount++;
+          noProgressCount = 0;
+          continue;
+        }
+        break;
+      }
+
+      // Escolher movimento com variação controlada por trial
+      let pickIdx = 0;
+      if (moves.length > 1) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        const r = (seed >>> 0) / 0x80000000;
+        if (r < 0.6) pickIdx = 0;
+        else if (r < 0.85) pickIdx = Math.min(1, moves.length - 1);
+        else pickIdx = Math.min(2, moves.length - 1);
+      }
+
+      const move = moves[pickIdx];
+      const movedCards = state.tableau[move.from].splice(move.ci);
+      state.tableau[move.to].push(...movedCards);
+      this._solverFlipTop(state.tableau[move.from]);
+
+      moveCount++;
+      noProgressCount++;
+
+      // Se sem progresso por muito tempo, tentar distribuir do estoque
+      if (noProgressCount > 40 && state.stock.length > 0) {
+        this._solverDeal(state);
+        moveCount++;
+        noProgressCount = 0;
+      }
+    }
+
+    return state.completed >= 8;
   }
 
   // Para o timer
