@@ -437,11 +437,12 @@ class SpiderGame {
   }
 
   // Retorna todas as opções de dica válidas:
-  // - movimento para sequência do mesmo naipe
   // - carta de destino deve ser imediatamente maior (regra do jogo)
+  // - mesmo naipe é preferência (não obrigação)
   // - não quebrar sequência do mesmo naipe na origem
   getHints() {
     const hints = [];
+    const emptyHints = [];
 
     for (let from = 0; from < 10; from++) {
       const col = this.tableau[from];
@@ -456,33 +457,51 @@ class SpiderGame {
           if (!this.canMove(from, ci, to)) continue;
 
           const targetCol = this.tableau[to];
-          if (targetCol.length === 0) continue;
+          const targetRunLength = targetCol.length > 0 ? this._getTopSameSuitRunLength(to) : 0;
+          const sameSuit = targetCol.length > 0 && targetCol[targetCol.length - 1].suit === movingCard.suit;
 
-          const topCard = targetCol[targetCol.length - 1];
-          if (topCard.suit !== movingCard.suit) continue;
+          // Evita sugerir enfraquecer pilhas boas: mover sequência longa para naipe diferente.
+          if (!sameSuit && movingRunLength > 1) continue;
 
-          const targetRunLength = this._getTopSameSuitRunLength(to);
-
-          hints.push({
+          const hint = {
             fromCol: from,
             cardIndex: ci,
             toCol: to,
+            sameSuit,
             movingRunLength,
             targetRunLength,
             combinedRunLength: movingRunLength + targetRunLength
-          });
+          };
+
+          if (targetCol.length === 0) {
+            emptyHints.push(hint);
+          } else {
+            hints.push(hint);
+          }
         }
       }
     }
 
     hints.sort((a, b) =>
+      Number(b.sameSuit) - Number(a.sameSuit) ||
       b.combinedRunLength - a.combinedRunLength ||
       a.fromCol - b.fromCol ||
       a.cardIndex - b.cardIndex ||
       a.toCol - b.toCol
     );
 
-    return hints;
+    // Só sugere vazias se não houver movimento útil para colunas com cartas.
+    if (hints.length > 0) return hints;
+
+    emptyHints.sort((a, b) =>
+      Number(b.sameSuit) - Number(a.sameSuit) ||
+      b.movingRunLength - a.movingRunLength ||
+      a.fromCol - b.fromCol ||
+      a.cardIndex - b.cardIndex ||
+      a.toCol - b.toCol
+    );
+
+    return emptyHints;
   }
 
   // Compatibilidade com chamadas legadas
