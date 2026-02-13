@@ -12,6 +12,7 @@ class SpiderGame {
     this.gameOver = false;
     this.timerInterval = null;
     this.savedDealOrder = null; // para reiniciar mesmo jogo
+    this.gameId = null;
   }
 
   newGame(numSuits) {
@@ -25,8 +26,8 @@ class SpiderGame {
       if (this._checkWinnable(deck.cards)) break;
     }
 
-    // Salvar a ordem das cartas para poder reiniciar
-    this.savedDealOrder = deck.cards.map(c => ({ suit: c.suit, value: c.value }));
+    // Salvar a ordem das cartas para poder reiniciar e compartilhar via ID
+    this._setDealOrderAndId(deck.cards);
 
     this._setupGame(deck.cards);
   }
@@ -37,6 +38,152 @@ class SpiderGame {
     // Recriar cartas na mesma ordem
     const cards = this.savedDealOrder.map(c => new Card(c.suit, c.value));
     this._setupGame(cards);
+  }
+
+  newGameFromId(gameId) {
+    try {
+      const decoded = this._decodeGameId(gameId);
+      this.numSuits = decoded.numSuits;
+      this.savedDealOrder = decoded.savedDealOrder;
+      this.gameId = decoded.gameId;
+
+      const cards = this.savedDealOrder.map(c => new Card(c.suit, c.value));
+      this._setupGame(cards);
+
+      return { ok: true, numSuits: this.numSuits, gameId: this.gameId };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  _setDealOrderAndId(cards) {
+    this.savedDealOrder = cards.map(c => ({ suit: c.suit, value: c.value }));
+    this.gameId = this._encodeGameId(this.numSuits, this.savedDealOrder);
+  }
+
+  _encodeGameId(numSuits, savedDealOrder) {
+    const bytes = savedDealOrder.map(card => {
+      const suitIdx = SUIT_KEYS.indexOf(card.suit);
+      if (suitIdx < 0) throw new Error('Naipe inválido na serialização');
+      if (card.value < 1 || card.value > 13) throw new Error('Valor inválido na serialização');
+      return suitIdx * 13 + (card.value - 1);
+    });
+
+    const payload = this._bytesToBase64Url(bytes);
+    const checksum = this._computeGameChecksum(numSuits, bytes).toString(16).padStart(4, '0');
+    return `SP1-${numSuits}-${payload}-${checksum}`;
+  }
+
+  _decodeGameId(gameId) {
+    if (typeof gameId !== 'string' || gameId.trim() === '') {
+      throw new Error('ID do jogo vazio');
+    }
+
+    const trimmed = gameId.trim();
+    const parts = trimmed.split('-');
+    if (parts.length !== 4 || parts[0] !== 'SP1') {
+      throw new Error('Formato de ID inválido');
+    }
+
+    const numSuits = Number(parts[1]);
+    if (![1, 2, 4].includes(numSuits)) {
+      throw new Error('Quantidade de naipes inválida no ID');
+    }
+
+    if (!/^[0-9a-fA-F]{4}$/.test(parts[3])) {
+      throw new Error('Checksum inválido no ID');
+    }
+
+    const bytes = this._base64UrlToBytes(parts[2]);
+    if (bytes.length !== 104) {
+      throw new Error('ID com quantidade de cartas inválida');
+    }
+
+    for (const b of bytes) {
+      if (b < 0 || b > 51) {
+        throw new Error('ID contém carta inválida');
+      }
+    }
+
+    const expectedChecksum = this._computeGameChecksum(numSuits, bytes);
+    const receivedChecksum = parseInt(parts[3], 16);
+    if (expectedChecksum !== receivedChecksum) {
+      throw new Error('Checksum não confere');
+    }
+
+    const allowedSuits = new Set(SUIT_KEYS.slice(0, numSuits));
+    const repeats = 104 / (13 * numSuits);
+    const counters = {};
+    for (const suit of allowedSuits) {
+      counters[suit] = Array(14).fill(0);
+    }
+
+    const savedDealOrder = bytes.map(code => {
+      const suitIdx = Math.floor(code / 13);
+      const value = (code % 13) + 1;
+      const suit = SUIT_KEYS[suitIdx];
+
+      if (!allowedSuits.has(suit)) {
+        throw new Error('ID contém naipes incompatíveis com a dificuldade');
+      }
+
+      counters[suit][value]++;
+      return { suit, value };
+    });
+
+    for (const suit of allowedSuits) {
+      for (let value = 1; value <= 13; value++) {
+        if (counters[suit][value] !== repeats) {
+          throw new Error('Distribuição de cartas inválida no ID');
+        }
+      }
+    }
+
+    return {
+      numSuits,
+      savedDealOrder,
+      gameId: this._encodeGameId(numSuits, savedDealOrder)
+    };
+  }
+
+  _bytesToBase64Url(bytes) {
+    let binary = '';
+    for (const b of bytes) {
+      binary += String.fromCharCode(b);
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+
+  _base64UrlToBytes(payload) {
+    if (!/^[A-Za-z0-9\-_]+$/.test(payload)) {
+      throw new Error('Payload inválido no ID');
+    }
+
+    let base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) {
+      base64 += '=';
+    }
+
+    let binary = '';
+    try {
+      binary = atob(base64);
+    } catch {
+      throw new Error('Payload inválido no ID');
+    }
+
+    const bytes = [];
+    for (let i = 0; i < binary.length; i++) {
+      bytes.push(binary.charCodeAt(i));
+    }
+    return bytes;
+  }
+
+  _computeGameChecksum(numSuits, bytes) {
+    let checksum = (numSuits * 131) & 0xffff;
+    for (const b of bytes) {
+      checksum = ((checksum * 31) + b + 7) & 0xffff;
+    }
+    return checksum;
   }
 
   _setupGame(cards) {

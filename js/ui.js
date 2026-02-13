@@ -14,7 +14,7 @@ function startGame(numSuits) {
   document.getElementById('menu-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
 
-  showToast('Gerando jogo vencível...');
+  showToast('Iniciando jogo');
 
   // Usar setTimeout para permitir que a UI atualize antes do solver rodar
   setTimeout(() => {
@@ -22,6 +22,35 @@ function startGame(numSuits) {
     stats.recordGameStart(numSuits);
     render();
     startTimerUpdate();
+  }, 50);
+}
+
+function startGameFromId() {
+  const idInput = document.getElementById('deal-id-input');
+  const dealId = idInput ? idInput.value.trim() : '';
+  if (!dealId) {
+    showToast('Informe um ID de jogo');
+    return;
+  }
+
+  document.getElementById('menu-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.remove('hidden');
+
+  showToast('Iniciando jogo');
+
+  setTimeout(() => {
+    const result = game.newGameFromId(dealId);
+    if (!result.ok) {
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('menu-screen').classList.remove('hidden');
+      showToast(`ID inválido: ${result.error}`);
+      return;
+    }
+
+    stats.recordGameStart(game.numSuits);
+    render();
+    startTimerUpdate();
+    if (idInput) idInput.value = '';
   }, 50);
 }
 
@@ -44,6 +73,41 @@ function restartGame() {
   render();
   startTimerUpdate();
   showToast('Jogo reiniciado');
+}
+
+function copyGameId() {
+  if (!game.gameId) {
+    showToast('ID da partida indisponível');
+    return;
+  }
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(game.gameId)
+      .then(() => showToast('ID copiado'))
+      .catch(() => copyGameIdFallback(game.gameId));
+    return;
+  }
+
+  copyGameIdFallback(game.gameId);
+}
+
+function copyGameIdFallback(gameId) {
+  const ta = document.createElement('textarea');
+  ta.value = gameId;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+
+  const copied = document.execCommand('copy');
+  ta.remove();
+
+  if (copied) {
+    showToast('ID copiado');
+  } else {
+    showToast('Não foi possível copiar o ID');
+  }
 }
 
 // === Timer ===
@@ -575,3 +639,12 @@ window.addEventListener('resize', () => {
     render();
   }
 });
+
+const dealIdInput = document.getElementById('deal-id-input');
+if (dealIdInput) {
+  dealIdInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      startGameFromId();
+    }
+  });
+}

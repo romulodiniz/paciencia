@@ -30,6 +30,13 @@
           <span class="btn-desc">Difícil</span>
         </button>
       </div>
+      <div class="deal-id-box">
+        <p class="deal-id-title">Jogar por ID</p>
+        <div class="deal-id-row">
+          <input id="deal-id-input" type="text" placeholder="Cole o ID da partida" autocomplete="off">
+          <button class="btn btn-secondary" onclick="startGameFromId()">Iniciar por ID</button>
+        </div>
+      </div>
       <button class="btn btn-stats" onclick="showStats()">
         📊 Estatísticas
       </button>
@@ -44,6 +51,7 @@
         <button class="toolbar-btn" onclick="showMenu()"><span class="tb-icon">✕</span><span class="tb-label">Menu</span></button>
         <button class="toolbar-btn" onclick="confirmNewGame()"><span class="tb-icon">⟳</span><span class="tb-label">Novo</span></button>
         <button class="toolbar-btn" onclick="restartGame()"><span class="tb-icon">↺</span><span class="tb-label">Reiniciar</span></button>
+        <button class="toolbar-btn" onclick="copyGameId()"><span class="tb-icon">#</span><span class="tb-label">Copiar ID</span></button>
         <button class="toolbar-btn" onclick="undoMove()"><span class="tb-icon">↩</span><span class="tb-label">Desfazer</span></button>
         <button class="toolbar-btn" onclick="showHint()"><span class="tb-icon">?</span><span class="tb-label">Dica</span></button>
       </div>
@@ -66,7 +74,6 @@
         <div class="stock-area" id="stock-area" onclick="dealCards()" title="Distribuir cartas"></div>
       </div>
     </div>
-
     <!-- Tableau -->
     <div class="tableau" id="tableau"></div>
   </div>
