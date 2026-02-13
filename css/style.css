@@ -281,7 +281,7 @@ body {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-.column.hint-target {
+.column.hint-source {
   background: rgba(255, 215, 0, 0.15);
   border-color: rgba(255, 215, 0, 0.4);
 }

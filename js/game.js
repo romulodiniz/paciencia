@@ -262,56 +262,86 @@ class SpiderGame {
     return true;
   }
 
-  // Sugere um movimento válido
+  _getTopSameSuitRunLength(colIndex) {
+    const col = this.tableau[colIndex];
+    if (col.length === 0) return 0;
+
+    let runLength = 1;
+    for (let i = col.length - 1; i > 0; i--) {
+      const top = col[i];
+      const below = col[i - 1];
+      if (!below.faceUp) break;
+      if (below.suit !== top.suit) break;
+      if (below.value !== top.value + 1) break;
+      runLength++;
+    }
+    return runLength;
+  }
+
+  _wouldBreakSourceRun(fromCol, cardIndex) {
+    if (cardIndex === 0) return false;
+
+    const col = this.tableau[fromCol];
+    const movingCard = col[cardIndex];
+    const below = col[cardIndex - 1];
+
+    if (!below.faceUp) return false;
+    return below.suit === movingCard.suit && below.value === movingCard.value + 1;
+  }
+
+  // Retorna todas as opções de dica válidas:
+  // - movimento para sequência do mesmo naipe
+  // - carta de destino deve ser imediatamente maior (regra do jogo)
+  // - não quebrar sequência do mesmo naipe na origem
+  getHints() {
+    const hints = [];
+
+    for (let from = 0; from < 10; from++) {
+      const col = this.tableau[from];
+      for (let ci = col.length - 1; ci >= 0; ci--) {
+        if (!this.canPickUp(from, ci)) break;
+        if (this._wouldBreakSourceRun(from, ci)) continue;
+
+        const movingCard = col[ci];
+        const movingRunLength = col.length - ci;
+
+        for (let to = 0; to < 10; to++) {
+          if (!this.canMove(from, ci, to)) continue;
+
+          const targetCol = this.tableau[to];
+          if (targetCol.length === 0) continue;
+
+          const topCard = targetCol[targetCol.length - 1];
+          if (topCard.suit !== movingCard.suit) continue;
+
+          const targetRunLength = this._getTopSameSuitRunLength(to);
+
+          hints.push({
+            fromCol: from,
+            cardIndex: ci,
+            toCol: to,
+            movingRunLength,
+            targetRunLength,
+            combinedRunLength: movingRunLength + targetRunLength
+          });
+        }
+      }
+    }
+
+    hints.sort((a, b) =>
+      b.combinedRunLength - a.combinedRunLength ||
+      a.fromCol - b.fromCol ||
+      a.cardIndex - b.cardIndex ||
+      a.toCol - b.toCol
+    );
+
+    return hints;
+  }
+
+  // Compatibilidade com chamadas legadas
   getHint() {
-    // Prioridade 1: Movimentos que formam sequências do mesmo naipe
-    for (let from = 0; from < 10; from++) {
-      const col = this.tableau[from];
-      for (let ci = col.length - 1; ci >= 0; ci--) {
-        if (!this.canPickUp(from, ci)) break;
-        for (let to = 0; to < 10; to++) {
-          if (this.canMove(from, ci, to)) {
-            const targetCol = this.tableau[to];
-            if (targetCol.length > 0) {
-              const topCard = targetCol[targetCol.length - 1];
-              const movingCard = col[ci];
-              // Preferir mover para mesma cor/naipe
-              if (topCard.suit === movingCard.suit) {
-                return { fromCol: from, cardIndex: ci, toCol: to, priority: 'same_suit' };
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Prioridade 2: Qualquer movimento válido (exceto para colunas vazias sem necessidade)
-    for (let from = 0; from < 10; from++) {
-      const col = this.tableau[from];
-      for (let ci = col.length - 1; ci >= 0; ci--) {
-        if (!this.canPickUp(from, ci)) break;
-        for (let to = 0; to < 10; to++) {
-          if (this.canMove(from, ci, to) && this.tableau[to].length > 0) {
-            return { fromCol: from, cardIndex: ci, toCol: to, priority: 'any' };
-          }
-        }
-      }
-    }
-
-    // Prioridade 3: Mover para coluna vazia
-    for (let from = 0; from < 10; from++) {
-      const col = this.tableau[from];
-      for (let ci = col.length - 1; ci >= 0; ci--) {
-        if (!this.canPickUp(from, ci)) break;
-        for (let to = 0; to < 10; to++) {
-          if (this.canMove(from, ci, to)) {
-            return { fromCol: from, cardIndex: ci, toCol: to, priority: 'empty' };
-          }
-        }
-      }
-    }
-
-    return null;
+    const hints = this.getHints();
+    return hints.length > 0 ? hints[0] : null;
   }
 
   // Verifica vitória

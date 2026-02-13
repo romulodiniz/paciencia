@@ -428,8 +428,8 @@ function showHint() {
   // Limpar hint anterior
   clearHint();
 
-  const hint = game.getHint();
-  if (!hint) {
+  const hints = game.getHints();
+  if (hints.length === 0) {
     if (game.stock.length > 0) {
       showToast('Nenhum movimento encontrado. Tente distribuir do estoque.');
     } else {
@@ -438,16 +438,12 @@ function showHint() {
     return;
   }
 
-  // Destacar cartas da dica
-  const col = game.tableau[hint.fromCol];
-  for (let i = hint.cardIndex; i < col.length; i++) {
-    const cardEl = document.querySelector(`.card[data-col="${hint.fromCol}"][data-card-idx="${i}"]`);
-    if (cardEl) cardEl.classList.add('hint-card');
+  // Destacar apenas as colunas de origem de todas as opções encontradas
+  const sourceCols = [...new Set(hints.map(h => h.fromCol))];
+  for (const fromCol of sourceCols) {
+    const colEl = document.querySelector(`.column[data-col="${fromCol}"]`);
+    if (colEl) colEl.classList.add('hint-source');
   }
-
-  // Destacar coluna alvo
-  const targetColEl = document.querySelector(`.column[data-col="${hint.toCol}"]`);
-  if (targetColEl) targetColEl.classList.add('hint-target');
 
   // Remover destaque após 2 segundos
   hintTimeout = setTimeout(clearHint, 2000);
@@ -458,8 +454,7 @@ function clearHint() {
     clearTimeout(hintTimeout);
     hintTimeout = null;
   }
-  document.querySelectorAll('.hint-card').forEach(el => el.classList.remove('hint-card'));
-  document.querySelectorAll('.hint-target').forEach(el => el.classList.remove('hint-target'));
+  document.querySelectorAll('.hint-source').forEach(el => el.classList.remove('hint-source'));
 }
 
 // === Vitória ===
