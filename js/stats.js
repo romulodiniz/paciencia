@@ -25,15 +25,35 @@ class Stats {
   }
 
   _load() {
+    const defaultData = this._defaultData();
     try {
       const saved = localStorage.getItem(this.STORAGE_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return this._normalizeData(parsed, defaultData);
       }
     } catch (e) {
       // ignore
     }
-    return this._defaultData();
+    return defaultData;
+  }
+
+  _normalizeData(data, defaultData) {
+    const normalized = {};
+    for (const suits of [1, 2, 4]) {
+      const source = data && data[suits] ? data[suits] : {};
+      const fallback = defaultData[suits];
+      normalized[suits] = {
+        gamesPlayed: Number.isFinite(source.gamesPlayed) ? source.gamesPlayed : fallback.gamesPlayed,
+        gamesWon: Number.isFinite(source.gamesWon) ? source.gamesWon : fallback.gamesWon,
+        bestTime: Number.isFinite(source.bestTime) ? source.bestTime : fallback.bestTime,
+        bestScore: Number.isFinite(source.bestScore) ? source.bestScore : fallback.bestScore,
+        fewestMoves: Number.isFinite(source.fewestMoves) ? source.fewestMoves : fallback.fewestMoves,
+        currentStreak: Number.isFinite(source.currentStreak) ? source.currentStreak : fallback.currentStreak,
+        bestStreak: Number.isFinite(source.bestStreak) ? source.bestStreak : fallback.bestStreak
+      };
+    }
+    return normalized;
   }
 
   _save() {
@@ -92,6 +112,33 @@ class Stats {
     const stats = this.data[numSuits];
     if (stats.gamesPlayed === 0) return '0%';
     return Math.round((stats.gamesWon / stats.gamesPlayed) * 100) + '%';
+  }
+
+  getOverallStats() {
+    const all = [this.data[1], this.data[2], this.data[4]];
+    const totalPlayed = all.reduce((acc, s) => acc + s.gamesPlayed, 0);
+    const totalWon = all.reduce((acc, s) => acc + s.gamesWon, 0);
+
+    let bestTime = null;
+    let bestScore = null;
+    let fewestMoves = null;
+
+    for (const s of all) {
+      if (s.bestTime !== null && (bestTime === null || s.bestTime < bestTime)) bestTime = s.bestTime;
+      if (s.bestScore !== null && (bestScore === null || s.bestScore > bestScore)) bestScore = s.bestScore;
+      if (s.fewestMoves !== null && (fewestMoves === null || s.fewestMoves < fewestMoves)) fewestMoves = s.fewestMoves;
+    }
+
+    const winRate = totalPlayed === 0 ? '0%' : Math.round((totalWon / totalPlayed) * 100) + '%';
+
+    return {
+      gamesPlayed: totalPlayed,
+      gamesWon: totalWon,
+      winRate,
+      bestTime,
+      bestScore,
+      fewestMoves
+    };
   }
 
   reset() {

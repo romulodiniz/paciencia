@@ -567,6 +567,7 @@ function switchStatsTab(numSuits) {
 
 function renderStatsContent(numSuits) {
   const s = stats.getStats(numSuits);
+  const overall = stats.getOverallStats();
   const content = document.getElementById('stats-content');
   content.innerHTML = `
     <div class="stat-card">
@@ -574,12 +575,16 @@ function renderStatsContent(numSuits) {
       <div class="stat-label">Jogos Iniciados</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">${s.gamesWon}</div>
-      <div class="stat-label">Vitórias</div>
+      <div class="stat-value">${s.gamesWon} (${stats.getWinRate(numSuits)})</div>
+      <div class="stat-label">Jogos Vencidos</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">${stats.getWinRate(numSuits)}</div>
-      <div class="stat-label">Taxa de Vitória</div>
+      <div class="stat-value">${overall.gamesWon} (${overall.winRate})</div>
+      <div class="stat-label">Vitórias Gerais</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${overall.gamesPlayed}</div>
+      <div class="stat-label">Jogos Iniciados (Geral)</div>
     </div>
     <div class="stat-card">
       <div class="stat-value">${stats.formatTime(s.bestTime)}</div>
@@ -592,6 +597,18 @@ function renderStatsContent(numSuits) {
     <div class="stat-card">
       <div class="stat-value">${s.fewestMoves ?? '--'}</div>
       <div class="stat-label">Menos Movimentos</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${stats.formatTime(overall.bestTime)}</div>
+      <div class="stat-label">Melhor Tempo (Geral)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${overall.bestScore ?? '--'}</div>
+      <div class="stat-label">Maior Pontuação (Geral)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${overall.fewestMoves ?? '--'}</div>
+      <div class="stat-label">Menos Movimentos (Geral)</div>
     </div>
     <div class="stat-card">
       <div class="stat-value">${s.currentStreak}</div>
