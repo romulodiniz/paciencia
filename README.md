@@ -64,8 +64,7 @@ js/stats.js         Estatísticas por dificuldade
 - Botão de reset com confirmação
 
 ### Garantia de jogabilidade
-- Todo jogo novo passa por verificação de vencibilidade (`_checkWinnable`) antes de ser apresentado — até 50 tentativas de deck diferentes
-- Se nenhum deck passar na verificação rápida (50 trials × 1500 movimentos), uma segunda rodada com solver mais agressivo (200 trials × 2000 movimentos) é executada
+- Todo jogo novo passa por verificação de vencibilidade (`_checkWinnable`) antes de ser apresentado — até 100 decks aleatórios, cada um testado com 25 tentativas × 1000 movimentos
 - Solver usado na verificação é o mesmo usado na funcionalidade "Resolver", garantindo consistência
 
 ## Pontuação

@@ -19,28 +19,12 @@ class SpiderGame {
   newGame(numSuits) {
     this.numSuits = numSuits;
 
-    const MAX_DEALS = 50;
+    const MAX_DEALS = 100;
     let deck;
-    let found = false;
     for (let attempt = 0; attempt < MAX_DEALS; attempt++) {
       deck = new Deck(numSuits);
       deck.shuffle();
-      if (this._checkWinnable(deck.cards)) {
-        found = true;
-        break;
-      }
-    }
-
-    // Se nenhum deck passou na verificação, gerar mais tentativas com solver mais agressivo
-    if (!found) {
-      for (let attempt = 0; attempt < MAX_DEALS; attempt++) {
-        deck = new Deck(numSuits);
-        deck.shuffle();
-        if (this._findInitialSolution(deck.cards)) {
-          found = true;
-          break;
-        }
-      }
+      if (this._checkWinnable(deck.cards)) break;
     }
 
     // Salvar a ordem das cartas para poder reiniciar e compartilhar via ID
@@ -536,8 +520,8 @@ class SpiderGame {
   // === Verificação de vencibilidade ===
 
   _checkWinnable(cards) {
-    const TRIALS = 50;
-    const MAX_MOVES = 1500;
+    const TRIALS = 25;
+    const MAX_MOVES = 1000;
     for (let t = 0; t < TRIALS; t++) {
       const result = this._trySolve(cards, t, MAX_MOVES);
       if (result !== null) {
