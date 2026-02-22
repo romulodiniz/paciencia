@@ -13,6 +13,7 @@ class SpiderGame {
     this.timerInterval = null;
     this.savedDealOrder = null; // para reiniciar mesmo jogo
     this.gameId = null;
+    this._initialSolution = null; // solução encontrada na criação do jogo
   }
 
   newGame(numSuits) {
@@ -20,10 +21,26 @@ class SpiderGame {
 
     const MAX_DEALS = 50;
     let deck;
+    let found = false;
     for (let attempt = 0; attempt < MAX_DEALS; attempt++) {
       deck = new Deck(numSuits);
       deck.shuffle();
-      if (this._checkWinnable(deck.cards)) break;
+      if (this._checkWinnable(deck.cards)) {
+        found = true;
+        break;
+      }
+    }
+
+    // Se nenhum deck passou na verificação, gerar mais tentativas com solver mais agressivo
+    if (!found) {
+      for (let attempt = 0; attempt < MAX_DEALS; attempt++) {
+        deck = new Deck(numSuits);
+        deck.shuffle();
+        if (this._findInitialSolution(deck.cards)) {
+          found = true;
+          break;
+        }
+      }
     }
 
     // Salvar a ordem das cartas para poder reiniciar e compartilhar via ID
@@ -48,6 +65,7 @@ class SpiderGame {
       this.gameId = decoded.gameId;
 
       const cards = this.savedDealOrder.map(c => new Card(c.suit, c.value));
+      this._findInitialSolution(cards); // busca exaustiva ao carregar por ID
       this._setupGame(cards);
 
       return { ok: true, numSuits: this.numSuits, gameId: this.gameId };
@@ -518,10 +536,30 @@ class SpiderGame {
   // === Verificação de vencibilidade ===
 
   _checkWinnable(cards) {
-    const TRIALS = 25;
-    const MAX_MOVES = 500;
+    const TRIALS = 50;
+    const MAX_MOVES = 1500;
     for (let t = 0; t < TRIALS; t++) {
-      if (this._trySolve(cards, t, MAX_MOVES)) return true;
+      const result = this._trySolve(cards, t, MAX_MOVES);
+      if (result !== null) {
+        this._initialSolution = result;
+        return true;
+      }
+    }
+    this._initialSolution = null;
+    return false;
+  }
+
+  // Busca mais exaustiva usada ao carregar jogo por ID (chamada apenas uma vez)
+  _findInitialSolution(cards) {
+    const TRIALS = 200;
+    const MAX_MOVES = 2000;
+    this._initialSolution = null;
+    for (let t = 0; t < TRIALS; t++) {
+      const result = this._trySolve(cards, t, MAX_MOVES);
+      if (result !== null) {
+        this._initialSolution = result;
+        return true;
+      }
     }
     return false;
   }
@@ -631,55 +669,82 @@ class SpiderGame {
     }
   }
 
-  _trySolve(cards, trial, maxMoves) {
-    const state = this._createSolverState(cards);
+  // Núcleo do solver: opera sobre um estado já criado, retorna movimentos ou null
+  _runSolver(state, trial, maxMoves) {
+    const moves = [];
     let seed = trial * 997 + 13;
     let moveCount = 0;
     let noProgressCount = 0;
+    let lastFrom = -1, lastTo = -1;
 
     while (moveCount < maxMoves && state.completed < 8) {
+      const completedBefore = state.completed;
       this._solverRemoveSequences(state);
-      if (state.completed >= 8) return true;
+      if (state.completed >= 8) return moves;
+      // Sequência completada = progresso real
+      if (state.completed > completedBefore) noProgressCount = 0;
 
-      const moves = this._solverGetMoves(state);
+      let availMoves = this._solverGetMoves(state);
 
-      if (moves.length === 0) {
+      if (availMoves.length === 0) {
         if (state.stock.length > 0) {
           this._solverDeal(state);
+          moves.push({ type: 'deal' });
           moveCount++;
           noProgressCount = 0;
+          lastFrom = lastTo = -1;
           continue;
         }
         break;
       }
 
-      // Escolher movimento com variação controlada por trial
+      // Anti-ciclo: bloqueia desfazer o último movimento imediatamente
+      if (lastFrom >= 0) {
+        const filtered = availMoves.filter(m => !(m.from === lastTo && m.to === lastFrom));
+        if (filtered.length > 0) availMoves = filtered;
+      }
+
       let pickIdx = 0;
-      if (moves.length > 1) {
+      if (availMoves.length > 1) {
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         const r = (seed >>> 0) / 0x80000000;
         if (r < 0.6) pickIdx = 0;
-        else if (r < 0.85) pickIdx = Math.min(1, moves.length - 1);
-        else pickIdx = Math.min(2, moves.length - 1);
+        else if (r < 0.85) pickIdx = Math.min(1, availMoves.length - 1);
+        else pickIdx = Math.min(2, availMoves.length - 1);
       }
 
-      const move = moves[pickIdx];
-      const movedCards = state.tableau[move.from].splice(move.ci);
-      state.tableau[move.to].push(...movedCards);
+      const move = availMoves[pickIdx];
+      // Verifica se o movimento revelará uma carta virada para baixo (progresso real)
+      const willReveal = move.ci > 0 && !state.tableau[move.from][move.ci - 1].faceUp;
+
+      state.tableau[move.to].push(...state.tableau[move.from].splice(move.ci));
       this._solverFlipTop(state.tableau[move.from]);
 
+      moves.push({ type: 'move', fromCol: move.from, cardIndex: move.ci, toCol: move.to });
       moveCount++;
-      noProgressCount++;
+      lastFrom = move.from;
+      lastTo = move.to;
 
-      // Se sem progresso por muito tempo, tentar distribuir do estoque
-      if (noProgressCount > 40 && state.stock.length > 0) {
-        this._solverDeal(state);
-        moveCount++;
+      if (willReveal) {
         noProgressCount = 0;
+      } else {
+        noProgressCount++;
+        // Sem revelar cartas por 20 movimentos → comprar do estoque para desbloquear
+        if (noProgressCount > 20 && state.stock.length > 0) {
+          this._solverDeal(state);
+          moves.push({ type: 'deal' });
+          moveCount++;
+          noProgressCount = 0;
+          lastFrom = lastTo = -1;
+        }
       }
     }
 
-    return state.completed >= 8;
+    return state.completed >= 8 ? moves : null;
+  }
+
+  _trySolve(cards, trial, maxMoves) {
+    return this._runSolver(this._createSolverState(cards), trial, maxMoves);
   }
 
   // Para o timer
@@ -688,5 +753,155 @@ class SpiderGame {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
     }
+  }
+
+  // === Resolver automático ===
+
+  // Copia o estado atual do jogo para uso no solver
+  _copyCurrentState() {
+    return {
+      tableau: this.tableau.map(col => col.map(c => ({ suit: c.suit, value: c.value, faceUp: c.faceUp }))),
+      stock: this.stock.map(c => ({ suit: c.suit, value: c.value, faceUp: c.faceUp })),
+      completed: this.completed.length
+    };
+  }
+
+  // Cópia profunda de um estado do solver
+  _copyState(state) {
+    return {
+      tableau: state.tableau.map(col => col.map(c => ({ suit: c.suit, value: c.value, faceUp: c.faceUp }))),
+      stock: state.stock.map(c => ({ suit: c.suit, value: c.value, faceUp: c.faceUp })),
+      completed: state.completed
+    };
+  }
+
+  // Hash compacto do estado para detecção de ciclos
+  _hashState(state) {
+    let h = '';
+    for (let c = 0; c < 10; c++) {
+      for (const card of state.tableau[c]) {
+        h += String.fromCharCode(33 + SUIT_KEYS.indexOf(card.suit) * 26 + (card.value - 1) * 2 + (card.faceUp ? 1 : 0));
+      }
+      h += '|';
+    }
+    h += state.stock.length + ',' + state.completed;
+    return h;
+  }
+
+  // Solver DFS com backtracking — fallback quando o greedy não encontra solução
+  _solveWithBacktracking(initialState, timeLimitMs) {
+    const deadline = Date.now() + timeLimitMs;
+    const visited = new Set();
+    const MAX_BRANCH = 3;
+
+    // Preparar estado inicial
+    this._solverRemoveSequences(initialState);
+    if (initialState.completed >= 8) return [];
+
+    const initHash = this._hashState(initialState);
+    visited.add(initHash);
+
+    // Gerar movimentos iniciais (card moves + deal)
+    const initMoves = this._backtrackMoves(initialState, MAX_BRANCH);
+    if (initMoves.length === 0) return null;
+
+    // Stack: cada frame = { state, availMoves, tryIdx, move (que levou a este estado) }
+    const stack = [{ state: initialState, availMoves: initMoves, tryIdx: 0, move: null }];
+    let iterations = 0;
+
+    while (stack.length > 0) {
+      // Checar timeout periodicamente
+      if (++iterations % 2000 === 0 && Date.now() > deadline) return null;
+
+      const frame = stack[stack.length - 1];
+
+      // Todos os branches deste nó foram tentados → backtrack
+      if (frame.tryIdx >= frame.availMoves.length) {
+        stack.pop();
+        continue;
+      }
+
+      const move = frame.availMoves[frame.tryIdx++];
+
+      // Copiar estado e aplicar o movimento
+      const newState = this._copyState(frame.state);
+
+      if (move.type === 'deal') {
+        this._solverDeal(newState);
+      } else {
+        newState.tableau[move.toCol].push(...newState.tableau[move.fromCol].splice(move.cardIndex));
+        this._solverFlipTop(newState.tableau[move.fromCol]);
+      }
+
+      // Remover sequências completas
+      this._solverRemoveSequences(newState);
+      if (newState.completed >= 8) {
+        // Reconstruir solução a partir do stack
+        const solution = [];
+        for (let i = 1; i < stack.length; i++) {
+          solution.push(stack[i].move);
+        }
+        solution.push(move);
+        return solution;
+      }
+
+      // Detectar ciclo via hash
+      const hash = this._hashState(newState);
+      if (visited.has(hash)) continue;
+      visited.add(hash);
+
+      // Gerar movimentos para o novo estado
+      const newMoves = this._backtrackMoves(newState, MAX_BRANCH);
+      if (newMoves.length === 0) continue; // beco sem saída → próximo branch
+
+      stack.push({ state: newState, availMoves: newMoves, tryIdx: 0, move });
+    }
+
+    return null;
+  }
+
+  // Gera lista de movimentos para o backtracking: top-N card moves + deal (se disponível)
+  _backtrackMoves(state, maxBranch) {
+    const cardMoves = this._solverGetMoves(state);
+    const moves = [];
+
+    const limit = Math.min(maxBranch, cardMoves.length);
+    for (let i = 0; i < limit; i++) {
+      const m = cardMoves[i];
+      moves.push({ type: 'move', fromCol: m.from, cardIndex: m.ci, toCol: m.to });
+    }
+
+    // Deal como última opção
+    if (state.stock.length > 0) {
+      moves.push({ type: 'deal' });
+    }
+
+    return moves;
+  }
+
+  // Tenta resolver a partir do estado atual; retorna lista de movimentos ou null
+  _trySolveFromCurrentState(trial, maxMoves) {
+    return this._runSolver(this._copyCurrentState(), trial, maxMoves);
+  }
+
+  // Busca uma sequência de movimentos que resolve o jogo a partir do estado atual
+  // Retorna array de movimentos ou null se não encontrar
+  findSolution() {
+    // Se ainda não foram feitos movimentos, usa a solução armazenada na criação do jogo
+    if (this._initialSolution && this.history.length === 0) {
+      return this._initialSolution;
+    }
+
+    // Busca gulosa com anti-ciclo a partir do estado atual
+    const TRIALS = 300;
+    const MAX_MOVES = 2000;
+
+    for (let t = 0; t < TRIALS; t++) {
+      const result = this._trySolveFromCurrentState(t, MAX_MOVES);
+      if (result !== null) return result;
+    }
+
+    // Fallback: solver DFS com backtracking (mais lento, até 15s)
+    return this._solveWithBacktracking(this._copyCurrentState(), 15000);
   }
 }

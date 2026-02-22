@@ -5,12 +5,18 @@ let currentStatsTab = 1;
 let timerUpdateInterval = null;
 let hintTimeout = null;
 
+// === Auto-Solve State ===
+let autoSolveActive = false;
+let autoSolveTimeout = null;
+let autoSolvePending = false;
+
 // === Drag & Drop State ===
 let dragState = null; // { fromCol, cardIndex, cards, ghost, offsetX, offsetY }
 let justDragged = false;
 
 // === Inicialização ===
 function startGame(numSuits) {
+  stopAutoSolve();
   document.getElementById('menu-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
 
@@ -55,6 +61,7 @@ function startGameFromId() {
 }
 
 function showMenu() {
+  stopAutoSolve();
   game.stopTimer();
   stopTimerUpdate();
   document.getElementById('game-screen').classList.add('hidden');
@@ -68,6 +75,7 @@ function confirmNewGame() {
 }
 
 function restartGame() {
+  stopAutoSolve();
   closeAllModals();
   game.restartGame();
   render();
@@ -263,6 +271,11 @@ function createCardElement(card, colIdx, cardIdx) {
 
 // === Drag & Drop ===
 function handleDragStart(e) {
+  if (autoSolveActive || autoSolvePending) {
+    e.preventDefault();
+    return;
+  }
+
   const colIdx = parseInt(e.target.closest('.card').dataset.col);
   const cardIdx = parseInt(e.target.closest('.card').dataset.cardIdx);
 
@@ -393,8 +406,8 @@ function handleDrop(e) {
 
 // === Click Auto-Move ===
 function handleCardClick(colIdx, cardIdx) {
-  // Ignorar click após drag
-  if (justDragged) return;
+  // Ignorar click após drag ou durante auto-solve
+  if (justDragged || autoSolveActive || autoSolvePending) return;
   // Tentar mover para a melhor coluna disponível
   if (!game.canPickUp(colIdx, cardIdx)) return;
 
@@ -451,6 +464,7 @@ function checkAfterMove(result) {
 
 // === Distribuir Cartas do Estoque ===
 function dealCards() {
+  if (autoSolveActive || autoSolvePending) return;
   const result = game.dealFromStock();
   if (!result.dealt) {
     showToast('Não há mais cartas no estoque');
@@ -480,6 +494,7 @@ function dealCards() {
 
 // === Desfazer ===
 function undoMove() {
+  if (autoSolveActive || autoSolvePending) return;
   if (game.undo()) {
     render();
   } else {
@@ -648,6 +663,112 @@ function showToast(message) {
   setTimeout(() => {
     if (toast.parentNode) toast.remove();
   }, 2500);
+}
+
+// === Auto-Solve ===
+function autoSolve() {
+  if (autoSolveActive) {
+    stopAutoSolve();
+    showToast('Resolução automática cancelada');
+    return;
+  }
+
+  if (game.gameOver || autoSolvePending) return;
+
+  autoSolvePending = true;
+  updateAutoSolveButton('searching');
+
+  // Pequeno delay para a UI atualizar antes do solver rodar
+  setTimeout(() => {
+    const solution = game.findSolution();
+    autoSolvePending = false;
+
+    if (!solution) {
+      updateAutoSolveButton('idle');
+      showToast('Solver não encontrou caminho vencedor para este estado');
+      return;
+    }
+
+    autoSolveActive = true;
+    updateAutoSolveButton('solving');
+    executeSolutionStep(solution, 0);
+  }, 60);
+}
+
+function executeSolutionStep(solution, index) {
+  if (!autoSolveActive || index >= solution.length) {
+    stopAutoSolve();
+    return;
+  }
+
+  const move = solution[index];
+
+  if (move.type === 'deal') {
+    const result = game.dealFromStock();
+    if (!result.dealt) {
+      stopAutoSolve();
+      return;
+    }
+    render();
+    if (result.completions && result.completions.length > 0) {
+      showToast('Sequência completa! +100 pontos');
+      if (game.checkWin()) {
+        stopAutoSolve();
+        handleWin();
+        return;
+      }
+    }
+  } else {
+    const result = game.moveCards(move.fromCol, move.cardIndex, move.toCol);
+    if (!result || !result.moved) {
+      stopAutoSolve();
+      showToast('Erro na resolução automática');
+      return;
+    }
+    render();
+    if (result.completedSequence) {
+      showToast('Sequência completa! +100 pontos');
+      if (game.checkWin()) {
+        stopAutoSolve();
+        handleWin();
+        return;
+      }
+    }
+  }
+
+  const delay = move.type === 'deal' ? 500 : 180;
+  autoSolveTimeout = setTimeout(() => executeSolutionStep(solution, index + 1), delay);
+}
+
+function stopAutoSolve() {
+  autoSolveActive = false;
+  autoSolvePending = false;
+  if (autoSolveTimeout) {
+    clearTimeout(autoSolveTimeout);
+    autoSolveTimeout = null;
+  }
+  updateAutoSolveButton('idle');
+}
+
+function updateAutoSolveButton(state) {
+  const btn = document.getElementById('auto-solve-btn');
+  if (!btn) return;
+  const icon = btn.querySelector('.tb-icon');
+  const label = btn.querySelector('.tb-label');
+  btn.classList.remove('solving', 'searching');
+
+  if (state === 'searching') {
+    icon.textContent = '⏳';
+    label.textContent = 'Buscando';
+    btn.classList.add('searching');
+  } else if (state === 'solving') {
+    icon.textContent = '⏹';
+    label.textContent = 'Parar';
+    btn.classList.add('solving');
+  } else {
+    icon.textContent = '▶';
+    label.textContent = 'Resolver';
+  }
 }
 
 // === Responsividade ===
