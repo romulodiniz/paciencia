@@ -314,6 +314,15 @@ self.onmessage = function(e) {
 };
 `;
 
+const POOL_MIN_START = 100;
+let poolWaitInterval = null;
+let pendingStart = null;
+
+// Preaquecer pool em background antes da escolha do usuário
+setTimeout(() => {
+  prewarmPools();
+}, 0);
+
 // === Drag & Drop State ===
 let dragState = null; // { fromCol, cardIndex, cards, ghost, offsetX, offsetY }
 let justDragged = false;
@@ -327,19 +336,7 @@ function startGame(numSuits) {
 
   showToast('Iniciando jogo');
 
-  // Usar setTimeout para permitir que a UI atualize antes do solver rodar
-  setTimeout(() => {
-    try {
-      game.newGame(numSuits);
-      stats.recordGameStart(numSuits);
-      render();
-      startTimerUpdate();
-    } catch (err) {
-      document.getElementById('game-screen').classList.add('hidden');
-      document.getElementById('menu-screen').classList.remove('hidden');
-      showToast(err && err.message ? err.message : 'Falha ao gerar jogo');
-    }
-  }, 50);
+  ensurePoolMinAndStart(numSuits);
 }
 
 function startGameFromId() {
@@ -375,6 +372,7 @@ function startGameFromId() {
 function showMenu() {
   stopAutoSolve();
   cancelSolverSearch(true);
+  cancelPoolWait(true);
   game.stopTimer();
   stopTimerUpdate();
   document.getElementById('game-screen').classList.add('hidden');
@@ -390,6 +388,7 @@ function confirmNewGame() {
 function restartGame() {
   stopAutoSolve();
   cancelSolverSearch(true);
+  cancelPoolWait(true);
   closeAllModals();
   game.restartGame();
   render();
@@ -972,6 +971,7 @@ function closeAllModals() {
   document.getElementById('stats-modal').classList.add('hidden');
   document.getElementById('win-modal').classList.add('hidden');
   document.getElementById('solver-modal').classList.add('hidden');
+  document.getElementById('pool-modal').classList.add('hidden');
 }
 
 function showToast(message) {
@@ -1173,6 +1173,95 @@ function updateAutoSolveButton(state) {
     label.textContent = 'Resolver';
   }
 }
+
+// === Pool Warmup ===
+function getPoolSize(numSuits) {
+  try {
+    return JSON.parse(localStorage.getItem(`spider_pool_${numSuits}`) || '[]').length;
+  } catch {
+    return 0;
+  }
+}
+
+function prewarmPools() {
+  if (typeof _startSpiderPoolWorkers === 'function') _startSpiderPoolWorkers();
+  [1, 2, 4].forEach(ns => {
+    if (getPoolSize(ns) < POOL_MIN_START) {
+      if (typeof game.generatePoolAsync === 'function') game.generatePoolAsync(ns);
+    }
+  });
+}
+
+function showPoolModal(numSuits, size) {
+  const modal = document.getElementById('pool-modal');
+  if (!modal) return;
+  const label = modal.querySelector('[data-pool-label]');
+  const count = modal.querySelector('[data-pool-count]');
+  if (label) label.textContent = numSuits === 1 ? '1 Naipe' : numSuits === 2 ? '2 Naipes' : '4 Naipes';
+  if (count) count.textContent = `${size} / ${POOL_MIN_START}`;
+  modal.classList.remove('hidden');
+}
+
+function hidePoolModal() {
+  const modal = document.getElementById('pool-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function cancelPoolWait(silent = false) {
+  if (poolWaitInterval) {
+    clearInterval(poolWaitInterval);
+    poolWaitInterval = null;
+  }
+  pendingStart = null;
+  hidePoolModal();
+  if (!silent) showToast('Preparação cancelada');
+  document.getElementById('game-screen').classList.add('hidden');
+  document.getElementById('menu-screen').classList.remove('hidden');
+}
+
+function ensurePoolMinAndStart(numSuits) {
+  const size = getPoolSize(numSuits);
+  if (size >= POOL_MIN_START) {
+    startGameFromPool(numSuits);
+    return;
+  }
+
+  pendingStart = { numSuits };
+  showPoolModal(numSuits, size);
+
+  if (poolWaitInterval) clearInterval(poolWaitInterval);
+  poolWaitInterval = setInterval(() => {
+    const current = getPoolSize(numSuits);
+    showPoolModal(numSuits, current);
+    if (current >= POOL_MIN_START) {
+      clearInterval(poolWaitInterval);
+      poolWaitInterval = null;
+      hidePoolModal();
+      startGameFromPool(numSuits);
+    }
+  }, 300);
+}
+
+function startGameFromPool(numSuits) {
+  try {
+    game.newGame(numSuits, { forcePool: true });
+    stats.recordGameStart(numSuits);
+    render();
+    startTimerUpdate();
+    pendingStart = null;
+  } catch (err) {
+    document.getElementById('game-screen').classList.add('hidden');
+    document.getElementById('menu-screen').classList.remove('hidden');
+    showToast(err && err.message ? err.message : 'Falha ao iniciar jogo');
+  }
+}
+
+window.addEventListener('spiderPoolUpdate', (e) => {
+  if (!pendingStart || !e || !e.detail) return;
+  const { numSuits, size } = e.detail;
+  if (pendingStart.numSuits !== numSuits) return;
+  showPoolModal(numSuits, size);
+});
 
 // === Responsividade ===
 window.addEventListener('resize', () => {

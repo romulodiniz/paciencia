@@ -113,6 +113,28 @@
     </div>
   </div>
 
+  <!-- Modal de Preparação do Pool -->
+  <div id="pool-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Preparando jogos</h2>
+        <button class="modal-close" onclick="cancelPoolWait()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="solver-status">
+          <div class="solver-spinner"></div>
+          <div>
+            <div class="solver-title">Gerando jogos ganháveis</div>
+            <div class="solver-subtitle"><span data-pool-label>--</span> — <span data-pool-count>0 / 100</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="cancelPoolWait()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal de Busca de Solução -->
   <div id="solver-modal" class="modal hidden">
     <div class="modal-content">
