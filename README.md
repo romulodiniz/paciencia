@@ -64,7 +64,9 @@ js/stats.js         Estatísticas por dificuldade
 - Botão de reset com confirmação
 
 ### Garantia de jogabilidade
-- Todo jogo novo passa por verificação de vencibilidade (`_checkWinnable`) antes de ser apresentado — até 100 decks aleatórios, cada um testado com 25 tentativas × 1000 movimentos
+- **Pool de jogos pré-gerados** armazenado em `localStorage` — jogos subsequentes iniciam instantaneamente
+- Após cada partida, novos jogos são gerados em background via `setTimeout` (até 20 por dificuldade)
+- Primeiro jogo (pool vazio) usa verificação rápida: até 100 decks aleatórios × 25 tentativas × 1000 movimentos
 - Solver usado na verificação é o mesmo usado na funcionalidade "Resolver", garantindo consistência
 
 ## Pontuação

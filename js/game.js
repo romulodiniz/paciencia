@@ -1,3 +1,42 @@
+// === Gerenciador global do pool de jogos via Web Workers ===
+
+const _POOL_MAX = 1000;
+const _POOL_RESUME_AT = 900;
+const _spiderPoolWorkers = {};
+
+function _startSpiderPoolWorkers() {
+  if (typeof Worker === 'undefined') return;
+  for (const numSuits of [1, 2, 4]) {
+    if (_spiderPoolWorkers[numSuits]) continue;
+    const w = new Worker('js/pool-worker.js');
+    w.onmessage = function(e) {
+      if (e.data.type !== 'game') return;
+      const ns = e.data.numSuits;
+      try {
+        const pool = JSON.parse(localStorage.getItem(`spider_pool_${ns}`) || '[]');
+        if (pool.length < _POOL_MAX) {
+          pool.push(e.data.gameId);
+          localStorage.setItem(`spider_pool_${ns}`, JSON.stringify(pool));
+          if (pool.length >= _POOL_MAX) w.postMessage({ cmd: 'pause' });
+        } else {
+          w.postMessage({ cmd: 'pause' });
+        }
+      } catch {}
+    };
+    w.postMessage({ cmd: 'start', numSuits });
+    _spiderPoolWorkers[numSuits] = w;
+  }
+}
+
+function _resumeSpiderPoolWorker(numSuits) {
+  const w = _spiderPoolWorkers[numSuits];
+  if (!w) return;
+  try {
+    const size = JSON.parse(localStorage.getItem(`spider_pool_${numSuits}`) || '[]').length;
+    if (size < _POOL_RESUME_AT) w.postMessage({ cmd: 'resume' });
+  } catch {}
+}
+
 class SpiderGame {
   constructor() {
     this.tableau = [];       // 10 colunas
@@ -19,18 +58,43 @@ class SpiderGame {
   newGame(numSuits) {
     this.numSuits = numSuits;
 
-    const MAX_DEALS = 100;
+    // Tentar pegar do pool pré-gerado (instantâneo)
+    const poolId = this._popFromPool(numSuits);
+    if (poolId) {
+      try {
+        const decoded = this._decodeGameId(poolId);
+        this.savedDealOrder = decoded.savedDealOrder;
+        this.gameId = decoded.gameId;
+        this._initialSolution = null;
+        const cards = this.savedDealOrder.map(c => new Card(c.suit, c.value));
+        this._setupGame(cards);
+        this.generatePoolAsync(numSuits);
+        return;
+      } catch {
+        // Pool corrompido — continuar com geração normal
+      }
+    }
+
+    // Fallback: gerar normalmente
+    const MAX_DEALS = 200;
     let deck;
+    let solvable = false;
     for (let attempt = 0; attempt < MAX_DEALS; attempt++) {
       deck = new Deck(numSuits);
       deck.shuffle();
-      if (this._checkWinnable(deck.cards)) break;
+      if (this._checkWinnable(deck.cards)) {
+        solvable = true;
+        break;
+      }
     }
 
-    // Salvar a ordem das cartas para poder reiniciar e compartilhar via ID
-    this._setDealOrderAndId(deck.cards);
+    if (!solvable) {
+      throw new Error('Não foi possível gerar um jogo ganhável após várias tentativas');
+    }
 
+    this._setDealOrderAndId(deck.cards);
     this._setupGame(deck.cards);
+    this.generatePoolAsync(numSuits);
   }
 
   restartGame() {
@@ -739,6 +803,70 @@ class SpiderGame {
     }
   }
 
+  // === Pool de jogos pré-gerados ===
+
+  _poolKey(numSuits) {
+    return `spider_pool_${numSuits}`;
+  }
+
+  _getPool(numSuits) {
+    try {
+      return JSON.parse(localStorage.getItem(this._poolKey(numSuits)) || '[]');
+    } catch { return []; }
+  }
+
+  _savePool(numSuits, pool) {
+    try {
+      localStorage.setItem(this._poolKey(numSuits), JSON.stringify(pool));
+    } catch {}
+  }
+
+  _popFromPool(numSuits) {
+    const pool = this._getPool(numSuits);
+    if (pool.length === 0) return null;
+    const idx = Math.floor(Math.random() * pool.length);
+    const gameId = pool.splice(idx, 1)[0];
+    this._savePool(numSuits, pool);
+    return gameId;
+  }
+
+  _addToPool(numSuits, gameId) {
+    const pool = this._getPool(numSuits);
+    if (pool.length >= _POOL_MAX) return;
+    pool.push(gameId);
+    this._savePool(numSuits, pool);
+  }
+
+  // Garante que o worker desta dificuldade está gerando; fallback por setTimeout se Worker indisponível
+  generatePoolAsync(numSuits) {
+    if (typeof Worker !== 'undefined' && _spiderPoolWorkers[numSuits]) {
+      _resumeSpiderPoolWorker(numSuits);
+      return;
+    }
+
+    // Fallback: geração por setTimeout (browsers sem suporte a Worker)
+    const generate = () => {
+      if (this._getPool(numSuits).length >= _POOL_MAX) return;
+
+      const deck = new Deck(numSuits);
+      deck.shuffle();
+
+      let solvable = false;
+      for (let t = 0; t < 25; t++) {
+        if (this._trySolve(deck.cards, t, 1000) !== null) { solvable = true; break; }
+      }
+
+      if (solvable) {
+        const order = deck.cards.map(c => ({ suit: c.suit, value: c.value }));
+        this._addToPool(numSuits, this._encodeGameId(numSuits, order));
+      }
+
+      setTimeout(generate, 100);
+    };
+
+    setTimeout(generate, 2000);
+  }
+
   // === Resolver automático ===
 
   // Copia o estado atual do jogo para uso no solver
@@ -886,6 +1014,6 @@ class SpiderGame {
     }
 
     // Fallback: solver DFS com backtracking (mais lento, até 15s)
-    return this._solveWithBacktracking(this._copyCurrentState(), 15000);
+    return this._solveWithBacktracking(this._copyCurrentState(), 30000);
   }
 }

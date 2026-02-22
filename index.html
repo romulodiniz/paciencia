@@ -48,14 +48,13 @@
     <!-- Barra Superior -->
     <div class="top-bar">
       <div class="top-bar-left">
-        <button class="toolbar-btn" onclick="showMenu()"><span class="tb-icon">✕</span><span class="tb-label">Menu</span></button>
+        <button class="toolbar-btn" onclick="showMenu()"><span class="tb-icon">☰</span><span class="tb-label">Menu</span></button>
         <button class="toolbar-btn" onclick="confirmNewGame()"><span class="tb-icon">⟳</span><span class="tb-label">Novo</span></button>
         <button class="toolbar-btn" onclick="restartGame()"><span class="tb-icon">↺</span><span class="tb-label">Reiniciar</span></button>
         <button class="toolbar-btn" onclick="copyGameId()"><span class="tb-icon">#</span><span class="tb-label">Copiar ID</span></button>
         <button class="toolbar-btn" onclick="undoMove()"><span class="tb-icon">↩</span><span class="tb-label">Desfazer</span></button>
-        <button class="toolbar-btn" onclick="showHint()"><span class="tb-icon">?</span><span class="tb-label">Dica</span></button>
-        <button id="auto-solve-btn" class="toolbar-btn" onclick="autoSolve()"><span class="tb-icon">▶</span><span class="tb-label">Resolver</span></button>
       </div>
+      <button class="toolbar-btn" onclick="showHint()"><span class="tb-icon">?</span><span class="tb-label">Dica</span></button>
       <div class="top-bar-center">
         <div class="info-item">
           <span class="info-label">Pontos</span>
@@ -71,6 +70,7 @@
         </div>
       </div>
       <div class="top-bar-right">
+        <button id="auto-solve-btn" class="toolbar-btn" onclick="autoSolve()"><span class="tb-icon">▶</span><span class="tb-label">Resolver</span></button>
         <div class="completed-area" id="completed-area"></div>
         <div class="stock-area" id="stock-area" onclick="dealCards()" title="Distribuir cartas"></div>
       </div>
@@ -113,9 +113,32 @@
     </div>
   </div>
 
+  <!-- Modal de Busca de Solução -->
+  <div id="solver-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Buscando solução</h2>
+        <button class="modal-close" onclick="cancelSolverSearch()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="solver-status">
+          <div class="solver-spinner"></div>
+          <div>
+            <div class="solver-title">Analisando o jogo…</div>
+            <div class="solver-subtitle">Isso pode levar alguns segundos.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="cancelSolverSearch()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/card.js"></script>
   <script src="js/game.js"></script>
   <script src="js/stats.js"></script>
   <script src="js/ui.js"></script>
+  <script>_startSpiderPoolWorkers();</script>
 </body>
 </html>
