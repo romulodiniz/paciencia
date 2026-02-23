@@ -276,6 +276,7 @@ class SpiderGame {
     this.savedDealOrder = null; // para reiniciar mesmo jogo
     this.gameId = null;
     this._initialSolution = null; // solução encontrada na criação do jogo
+    this.solverUsed = false;
   }
 
   newGame(numSuits, opts = {}) {
@@ -490,6 +491,7 @@ class SpiderGame {
     this.score = 500;
     this.gameOver = false;
     this.elapsed = 0;
+    this.solverUsed = false;
 
     if (this.timerInterval) {
       clearInterval(this.timerInterval);

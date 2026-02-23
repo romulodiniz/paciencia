@@ -872,7 +872,9 @@ function handleWin() {
   stopTimerUpdate();
   game.gameOver = true;
 
-  stats.recordWin(game.numSuits, game.elapsed, game.score, game.moves);
+  if (!game.solverUsed) {
+    stats.recordWin(game.numSuits, game.elapsed, game.score, game.moves);
+  }
 
   const winStats = document.getElementById('win-stats');
   winStats.innerHTML = `
@@ -1052,6 +1054,8 @@ function executeSolutionStep(solution, index) {
     stopAutoSolve();
     return;
   }
+
+  game.solverUsed = true;
 
   const move = solution[index];
 
