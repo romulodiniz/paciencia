@@ -1032,6 +1032,22 @@ class SpiderGame {
     }
   }
 
+  pauseTimer() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+      this.elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+    }
+  }
+
+  resumeTimer() {
+    if (this.timerInterval || this.startTime === null) return;
+    this.startTime = Date.now() - (this.elapsed * 1000);
+    this.timerInterval = setInterval(() => {
+      this.elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+    }, 1000);
+  }
+
   // === Pool de jogos pré-gerados ===
 
   _poolKey(numSuits) {
@@ -1048,6 +1064,33 @@ class SpiderGame {
     try {
       localStorage.setItem(this._poolKey(numSuits), JSON.stringify(pool));
     } catch {}
+  }
+
+  seedPoolFromList(numSuits, list, opts = {}) {
+    const min = opts.min ?? 10;
+    const max = opts.max ?? _POOL_MAX;
+    if (!Array.isArray(list) || list.length < min) {
+      return { added: 0, ignored: Array.isArray(list) ? list.length : 0, reason: 'min' };
+    }
+
+    const pool = this._getPool(numSuits);
+    const set = new Set(pool);
+    let added = 0;
+    for (const id of list) {
+      if (set.size >= max) break;
+      if (typeof id !== 'string' || set.has(id)) continue;
+      try {
+        const decoded = this._decodeGameId(id);
+        if (decoded.numSuits !== numSuits) continue;
+        set.add(decoded.gameId);
+        added++;
+      } catch {
+        continue;
+      }
+    }
+    const merged = Array.from(set);
+    this._savePool(numSuits, merged);
+    return { added, ignored: list.length - added, reason: 'ok' };
   }
 
   _popFromPool(numSuits) {

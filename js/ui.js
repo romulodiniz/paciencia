@@ -315,8 +315,11 @@ self.onmessage = function(e) {
 `;
 
 const POOL_MIN_START = 100;
+const POOL_FILE_MIN = 10;
+const POOL_FILE_MAX = 10000;
 let poolWaitInterval = null;
 let pendingStart = null;
+let gameActive = false;
 
 // Preaquecer pool em background antes da escolha do usuário
 setTimeout(() => {
@@ -365,6 +368,8 @@ function startGameFromId() {
     stats.recordGameStart(game.numSuits);
     render();
     startTimerUpdate();
+    gameActive = true;
+    updateResumeButton();
     if (idInput) idInput.value = '';
   }, 50);
 }
@@ -373,11 +378,12 @@ function showMenu() {
   stopAutoSolve();
   cancelSolverSearch(true);
   cancelPoolWait(true);
-  game.stopTimer();
+  game.pauseTimer();
   stopTimerUpdate();
   document.getElementById('game-screen').classList.add('hidden');
   document.getElementById('menu-screen').classList.remove('hidden');
   closeAllModals();
+  updateResumeButton();
 }
 
 function confirmNewGame() {
@@ -394,6 +400,17 @@ function restartGame() {
   render();
   startTimerUpdate();
   showToast('Jogo reiniciado');
+  gameActive = true;
+  updateResumeButton();
+}
+
+function resumeGame() {
+  if (!gameActive) return;
+  document.getElementById('menu-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.remove('hidden');
+  game.resumeTimer();
+  render();
+  startTimerUpdate();
 }
 
 function copyGameId() {
@@ -878,12 +895,18 @@ function handleWin() {
 
 // === Estatísticas ===
 function showStats() {
+  game.pauseTimer();
+  stopTimerUpdate();
   renderStatsContent(currentStatsTab);
   document.getElementById('stats-modal').classList.remove('hidden');
 }
 
 function closeStats() {
   document.getElementById('stats-modal').classList.add('hidden');
+  if (gameActive) {
+    game.resumeTimer();
+    startTimerUpdate();
+  }
 }
 
 function switchStatsTab(numSuits) {
@@ -1184,12 +1207,26 @@ function getPoolSize(numSuits) {
 }
 
 function prewarmPools() {
+  seedPoolsFromFiles();
   if (typeof _startSpiderPoolWorkers === 'function') _startSpiderPoolWorkers();
   [1, 2, 4].forEach(ns => {
     if (getPoolSize(ns) < POOL_MIN_START) {
       if (typeof game.generatePoolAsync === 'function') game.generatePoolAsync(ns);
     }
   });
+}
+
+function seedPoolsFromFiles() {
+  const sources = [
+    { ns: 1, list: window.SPIDER_POOL_1 },
+    { ns: 2, list: window.SPIDER_POOL_2 },
+    { ns: 4, list: window.SPIDER_POOL_4 }
+  ];
+
+  for (const src of sources) {
+    if (!Array.isArray(src.list) || src.list.length < POOL_FILE_MIN) continue;
+    game.seedPoolFromList(src.ns, src.list, { min: POOL_FILE_MIN, max: POOL_FILE_MAX });
+  }
 }
 
 function showPoolModal(numSuits, size) {
@@ -1249,11 +1286,19 @@ function startGameFromPool(numSuits) {
     render();
     startTimerUpdate();
     pendingStart = null;
+    gameActive = true;
+    updateResumeButton();
   } catch (err) {
     document.getElementById('game-screen').classList.add('hidden');
     document.getElementById('menu-screen').classList.remove('hidden');
     showToast(err && err.message ? err.message : 'Falha ao iniciar jogo');
   }
+}
+
+function updateResumeButton() {
+  const btn = document.getElementById('resume-btn');
+  if (!btn) return;
+  btn.classList.toggle('hidden', !gameActive);
 }
 
 window.addEventListener('spiderPoolUpdate', (e) => {
