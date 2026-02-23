@@ -3,10 +3,19 @@
 const _POOL_MAX = 10000;
 const _POOL_RESUME_AT = 9000;
 const _POOL_MIN_START = 100;
+const _POOL_HARD_MIN_MOVES = 220;
+const _POOL_HARD_MAX_INITIAL_MOVES = 8;
+const _POOL_HARD_MIN_SOLVE_MS = 300;
+const _POOL_HARD_SCORE_MIN = 2;
+const _POOL_HARD_PICK_CHANCE = 0.6;
 const _spiderPoolWorkers = {};
 const _POOL_WORKER_SOURCE = `'use strict';
 
 const SUIT_KEYS = ['spades', 'hearts', 'diamonds', 'clubs'];
+const HARD_MIN_MOVES = 220;
+const HARD_MAX_INITIAL_MOVES = 8;
+const HARD_MIN_SOLVE_MS = 300;
+const HARD_SCORE_MIN = 2;
 
 function shuffledDeck(numSuits) {
   const suitsToUse = SUIT_KEYS.slice(0, numSuits);
@@ -109,18 +118,21 @@ function trySolve(cards, trial) {
   let seed = trial * 997 + 13;
   let moveCount = 0, noProgress = 0, lastFrom = -1, lastTo = -1;
   const MAX = 1000;
+  const moves = [];
 
   while (moveCount < MAX && state.completed < 8) {
     const before = state.completed;
     removeSequences(state);
-    if (state.completed >= 8) return true;
+    if (state.completed >= 8) return moves.length;
     if (state.completed > before) noProgress = 0;
 
     let avail = getMoves(state);
 
     if (avail.length === 0) {
       if (state.stock.length > 0) {
-        deal(state); moveCount++; noProgress = 0; lastFrom = lastTo = -1;
+        deal(state);
+        moves.push({ type: 'deal' });
+        moveCount++; noProgress = 0; lastFrom = lastTo = -1;
         continue;
       }
       break;
@@ -144,17 +156,20 @@ function trySolve(cards, trial) {
     const willReveal = move.ci > 0 && !state.tableau[move.from][move.ci - 1].faceUp;
     state.tableau[move.to].push(...state.tableau[move.from].splice(move.ci));
     flipTop(state.tableau[move.from]);
+    moves.push({ type: 'move', fromCol: move.from, cardIndex: move.ci, toCol: move.to });
     moveCount++;
     lastFrom = move.from; lastTo = move.to;
 
     if (willReveal) {
       noProgress = 0;
     } else if (++noProgress > 20 && state.stock.length > 0) {
-      deal(state); moveCount++; noProgress = 0; lastFrom = lastTo = -1;
+      deal(state);
+      moves.push({ type: 'deal' });
+      moveCount++; noProgress = 0; lastFrom = lastTo = -1;
     }
   }
 
-  return state.completed >= 8;
+  return state.completed >= 8 ? moves.length : null;
 }
 
 function bytesToBase64Url(bytes) {
@@ -176,6 +191,19 @@ function encodeGameId(numSuits, cards) {
   return 'SP1-' + numSuits + '-' + payload + '-' + cs;
 }
 
+function countInitialMoves(cards) {
+  const state = createState(cards);
+  return getMoves(state).length;
+}
+
+function isHardCandidate(movesCount, initialMoves, solveMs) {
+  let score = 0;
+  if (movesCount >= HARD_MIN_MOVES) score++;
+  if (initialMoves <= HARD_MAX_INITIAL_MOVES) score++;
+  if (solveMs >= HARD_MIN_SOLVE_MS) score++;
+  return score >= HARD_SCORE_MIN;
+}
+
 let paused = false;
 let targetNumSuits = null;
 
@@ -186,13 +214,17 @@ function generate() {
   }
 
   const cards = shuffledDeck(targetNumSuits);
-  let solvable = false;
-  for (let t = 0; t < 25 && !solvable; t++) {
-    solvable = trySolve(cards, t);
+  const initialMoves = countInitialMoves(cards);
+  let solvedMoves = null;
+  const start = Date.now();
+  for (let t = 0; t < 25 && solvedMoves === null; t++) {
+    solvedMoves = trySolve(cards, t);
   }
+  const solveMs = Date.now() - start;
 
-  if (solvable) {
-    self.postMessage({ type: 'game', numSuits: targetNumSuits, gameId: encodeGameId(targetNumSuits, cards) });
+  if (solvedMoves !== null) {
+    const hard = isHardCandidate(solvedMoves, initialMoves, solveMs);
+    self.postMessage({ type: 'game', numSuits: targetNumSuits, gameId: encodeGameId(targetNumSuits, cards), hard });
   }
 
   setTimeout(generate, 0);
@@ -211,6 +243,35 @@ self.onmessage = function(e) {
   }
 };
 `;
+
+function _poolKey(numSuits) {
+  return `spider_pool_${numSuits}`;
+}
+
+function _poolKeyHard(numSuits) {
+  return `spider_pool_hard_${numSuits}`;
+}
+
+function _getPoolStorage(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function _savePoolStorage(key, pool) {
+  try {
+    localStorage.setItem(key, JSON.stringify(pool));
+  } catch {}
+}
+
+function _addToPoolStorage(key, gameId, maxSize) {
+  const pool = _getPoolStorage(key);
+  if (pool.length >= maxSize) return;
+  pool.push(gameId);
+  _savePoolStorage(key, pool);
+}
 
 function _startSpiderPoolWorkers() {
   if (typeof Worker === 'undefined') return;
@@ -233,12 +294,15 @@ function _startSpiderPoolWorkers() {
       if (e.data.type !== 'game') return;
       const ns = e.data.numSuits;
       try {
-        const pool = JSON.parse(localStorage.getItem(`spider_pool_${ns}`) || '[]');
+        const pool = _getPoolStorage(_poolKey(ns));
         if (pool.length < _POOL_MAX) {
           pool.push(e.data.gameId);
-          localStorage.setItem(`spider_pool_${ns}`, JSON.stringify(pool));
+          _savePoolStorage(_poolKey(ns), pool);
           if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
             window.dispatchEvent(new CustomEvent('spiderPoolUpdate', { detail: { numSuits: ns, size: pool.length } }));
+          }
+          if (e.data.hard) {
+            _addToPoolStorage(_poolKeyHard(ns), e.data.gameId, _POOL_MAX);
           }
           if (pool.length >= _POOL_MAX) w.postMessage({ cmd: 'pause' });
         } else {
@@ -255,7 +319,7 @@ function _resumeSpiderPoolWorker(numSuits) {
   const w = _spiderPoolWorkers[numSuits];
   if (!w) return;
   try {
-    const size = JSON.parse(localStorage.getItem(`spider_pool_${numSuits}`) || '[]').length;
+    const size = _getPoolStorage(_poolKey(numSuits)).length;
     if (size < _POOL_RESUME_AT) w.postMessage({ cmd: 'resume' });
   } catch {}
 }
@@ -285,8 +349,13 @@ class SpiderGame {
     // Tentar pegar do pool pré-gerado (instantâneo)
     const forcePool = !!opts.forcePool;
     let attempts = 0;
+    let useHard = false;
+    if (this._getPoolHard(numSuits).length > 0 && Math.random() < _POOL_HARD_PICK_CHANCE) {
+      useHard = true;
+    }
+
     while (attempts < 10) {
-      const poolId = this._popFromPool(numSuits);
+      const poolId = useHard ? this._popFromHardPool(numSuits) : this._popFromPool(numSuits);
       if (!poolId) break;
       try {
         const decoded = this._decodeGameId(poolId);
@@ -299,6 +368,25 @@ class SpiderGame {
         return;
       } catch {
         attempts++;
+      }
+    }
+    if (useHard) {
+      attempts = 0;
+      while (attempts < 10) {
+        const poolId = this._popFromPool(numSuits);
+        if (!poolId) break;
+        try {
+          const decoded = this._decodeGameId(poolId);
+          this.savedDealOrder = decoded.savedDealOrder;
+          this.gameId = decoded.gameId;
+          this._initialSolution = null;
+          const cards = this.savedDealOrder.map(c => new Card(c.suit, c.value));
+          this._setupGame(cards);
+          this.generatePoolAsync(numSuits);
+          return;
+        } catch {
+          attempts++;
+        }
       }
     }
     if (forcePool) {
@@ -940,6 +1028,19 @@ class SpiderGame {
     return moves;
   }
 
+  _countInitialMoves(cards) {
+    const state = this._createSolverState(cards);
+    return this._solverGetMoves(state).length;
+  }
+
+  _isHardCandidate(movesCount, initialMoves, solveMs) {
+    let score = 0;
+    if (movesCount >= _POOL_HARD_MIN_MOVES) score++;
+    if (initialMoves <= _POOL_HARD_MAX_INITIAL_MOVES) score++;
+    if (solveMs >= _POOL_HARD_MIN_SOLVE_MS) score++;
+    return score >= _POOL_HARD_SCORE_MIN;
+  }
+
   _solverDeal(state) {
     for (let i = 0; i < 10 && state.stock.length > 0; i++) {
       const card = state.stock.pop();
@@ -1056,16 +1157,24 @@ class SpiderGame {
     return `spider_pool_${numSuits}`;
   }
 
+  _poolKeyHard(numSuits) {
+    return `spider_pool_hard_${numSuits}`;
+  }
+
   _getPool(numSuits) {
-    try {
-      return JSON.parse(localStorage.getItem(this._poolKey(numSuits)) || '[]');
-    } catch { return []; }
+    return _getPoolStorage(this._poolKey(numSuits));
   }
 
   _savePool(numSuits, pool) {
-    try {
-      localStorage.setItem(this._poolKey(numSuits), JSON.stringify(pool));
-    } catch {}
+    _savePoolStorage(this._poolKey(numSuits), pool);
+  }
+
+  _getPoolHard(numSuits) {
+    return _getPoolStorage(this._poolKeyHard(numSuits));
+  }
+
+  _savePoolHard(numSuits, pool) {
+    _savePoolStorage(this._poolKeyHard(numSuits), pool);
   }
 
   seedPoolFromList(numSuits, list, opts = {}) {
@@ -1111,6 +1220,22 @@ class SpiderGame {
     this._savePool(numSuits, pool);
   }
 
+  _popFromHardPool(numSuits) {
+    const pool = this._getPoolHard(numSuits);
+    if (pool.length === 0) return null;
+    const idx = Math.floor(Math.random() * pool.length);
+    const gameId = pool.splice(idx, 1)[0];
+    this._savePoolHard(numSuits, pool);
+    return gameId;
+  }
+
+  _addToPoolHard(numSuits, gameId) {
+    const pool = this._getPoolHard(numSuits);
+    if (pool.length >= _POOL_MAX) return;
+    pool.push(gameId);
+    this._savePoolHard(numSuits, pool);
+  }
+
   // Garante que o worker desta dificuldade está gerando; fallback por setTimeout se Worker indisponível
   generatePoolAsync(numSuits) {
     if (typeof Worker !== 'undefined' && _spiderPoolWorkers[numSuits]) {
@@ -1125,14 +1250,22 @@ class SpiderGame {
       const deck = new Deck(numSuits);
       deck.shuffle();
 
-      let solvable = false;
+      let solvedMoves = null;
+      const initialMoves = this._countInitialMoves(deck.cards);
+      const start = Date.now();
       for (let t = 0; t < 25; t++) {
-        if (this._trySolve(deck.cards, t, 1000) !== null) { solvable = true; break; }
+        const result = this._trySolve(deck.cards, t, 1000);
+        if (result !== null) { solvedMoves = result.length; break; }
       }
+      const solveMs = Date.now() - start;
 
-      if (solvable) {
+      if (solvedMoves !== null) {
         const order = deck.cards.map(c => ({ suit: c.suit, value: c.value }));
-        this._addToPool(numSuits, this._encodeGameId(numSuits, order));
+        const gameId = this._encodeGameId(numSuits, order);
+        this._addToPool(numSuits, gameId);
+        if (this._isHardCandidate(solvedMoves, initialMoves, solveMs)) {
+          this._addToPoolHard(numSuits, gameId);
+        }
       }
 
       setTimeout(generate, 100);

@@ -2,6 +2,10 @@
 
 // === Constantes ===
 const SUIT_KEYS = ['spades', 'hearts', 'diamonds', 'clubs'];
+const HARD_MIN_MOVES = 220;
+const HARD_MAX_INITIAL_MOVES = 8;
+const HARD_MIN_SOLVE_MS = 300;
+const HARD_SCORE_MIN = 2;
 
 // === Geração de deck embaralhado (plain objects, sem classe Card) ===
 function shuffledDeck(numSuits) {
@@ -108,18 +112,21 @@ function trySolve(cards, trial) {
   let seed = trial * 997 + 13;
   let moveCount = 0, noProgress = 0, lastFrom = -1, lastTo = -1;
   const MAX = 1000;
+  const moves = [];
 
   while (moveCount < MAX && state.completed < 8) {
     const before = state.completed;
     removeSequences(state);
-    if (state.completed >= 8) return true;
+    if (state.completed >= 8) return moves.length;
     if (state.completed > before) noProgress = 0;
 
     let avail = getMoves(state);
 
     if (avail.length === 0) {
       if (state.stock.length > 0) {
-        deal(state); moveCount++; noProgress = 0; lastFrom = lastTo = -1;
+        deal(state);
+        moves.push({ type: 'deal' });
+        moveCount++; noProgress = 0; lastFrom = lastTo = -1;
         continue;
       }
       break;
@@ -143,17 +150,20 @@ function trySolve(cards, trial) {
     const willReveal = move.ci > 0 && !state.tableau[move.from][move.ci - 1].faceUp;
     state.tableau[move.to].push(...state.tableau[move.from].splice(move.ci));
     flipTop(state.tableau[move.from]);
+    moves.push({ type: 'move', fromCol: move.from, cardIndex: move.ci, toCol: move.to });
     moveCount++;
     lastFrom = move.from; lastTo = move.to;
 
     if (willReveal) {
       noProgress = 0;
     } else if (++noProgress > 20 && state.stock.length > 0) {
-      deal(state); moveCount++; noProgress = 0; lastFrom = lastTo = -1;
+      deal(state);
+      moves.push({ type: 'deal' });
+      moveCount++; noProgress = 0; lastFrom = lastTo = -1;
     }
   }
 
-  return state.completed >= 8;
+  return state.completed >= 8 ? moves.length : null;
 }
 
 // === Encoding de ID (espelho de SpiderGame._encodeGameId) ===
@@ -177,6 +187,19 @@ function encodeGameId(numSuits, cards) {
   return `SP1-${numSuits}-${payload}-${cs}`;
 }
 
+function countInitialMoves(cards) {
+  const state = createState(cards);
+  return getMoves(state).length;
+}
+
+function isHardCandidate(movesCount, initialMoves, solveMs) {
+  let score = 0;
+  if (movesCount >= HARD_MIN_MOVES) score++;
+  if (initialMoves <= HARD_MAX_INITIAL_MOVES) score++;
+  if (solveMs >= HARD_MIN_SOLVE_MS) score++;
+  return score >= HARD_SCORE_MIN;
+}
+
 // === Lógica do worker ===
 
 let paused = false;
@@ -189,13 +212,17 @@ function generate() {
   }
 
   const cards = shuffledDeck(targetNumSuits);
-  let solvable = false;
-  for (let t = 0; t < 25 && !solvable; t++) {
-    solvable = trySolve(cards, t);
+  const initialMoves = countInitialMoves(cards);
+  let solvedMoves = null;
+  const start = Date.now();
+  for (let t = 0; t < 25 && solvedMoves === null; t++) {
+    solvedMoves = trySolve(cards, t);
   }
+  const solveMs = Date.now() - start;
 
-  if (solvable) {
-    self.postMessage({ type: 'game', numSuits: targetNumSuits, gameId: encodeGameId(targetNumSuits, cards) });
+  if (solvedMoves !== null) {
+    const hard = isHardCandidate(solvedMoves, initialMoves, solveMs);
+    self.postMessage({ type: 'game', numSuits: targetNumSuits, gameId: encodeGameId(targetNumSuits, cards), hard });
   }
 
   setTimeout(generate, 0);
