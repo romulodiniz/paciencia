@@ -511,7 +511,7 @@ body {
 
 .card-face-up:hover {
   box-shadow: 0 14px 26px rgba(0, 0, 0, 0.35);
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .card-face-down {
@@ -559,6 +559,9 @@ body {
   font-size: 1.45rem;
   font-weight: 500;
   letter-spacing: -0.3px;
+  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
 }
 
 .card-suit-small {
@@ -809,9 +812,9 @@ body {
 }
 
 @keyframes removeSequence {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.1); }
-  100% { transform: scale(0.5) translateY(-200px); opacity: 0; }
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  40% { transform: translateY(-8px) scale(1.04); }
+  100% { transform: translateY(-200px) scale(0.55); opacity: 0; }
 }
 
 @keyframes winCelebration {
@@ -824,7 +827,7 @@ body {
 }
 
 .card-removing {
-  animation: removeSequence 0.5s ease-in forwards;
+  animation: removeSequence 0.65s ease-in forwards;
 }
 
 /* === TOAST / MENSAGEM === */

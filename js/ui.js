@@ -611,6 +611,56 @@ function createCardElement(card, colIdx, cardIdx) {
   return el;
 }
 
+function createGhostCardElement(card) {
+  const el = document.createElement('div');
+  el.className = 'card card-face-up card-removing ' + (card.color === 'red' ? 'card-red' : 'card-black');
+  el.style.pointerEvents = 'none';
+  el.innerHTML = `
+    <div class="card-corner card-corner-top">
+      <span class="card-value">${card.displayValue}</span>
+      <span class="card-suit-small">${card.symbol}</span>
+    </div>
+    <div class="card-center">${card.symbol}</div>
+  `;
+  return el;
+}
+
+function animateCompletedSequence(sequence) {
+  if (!sequence || !sequence.cards || sequence.cards.length === 0) return;
+  const colIndex = sequence.colIndex;
+  const cards = sequence.cards;
+  const colEl = document.querySelector(`.column[data-col="${colIndex}"]`);
+  if (!colEl) return;
+
+  const col = game.tableau[colIndex];
+  const tempCol = col.concat(cards);
+  const startIdx = col.length;
+  const ghosts = [];
+
+  for (let i = 0; i < cards.length; i++) {
+    const idx = startIdx + i;
+    const cardEl = createGhostCardElement(cards[i]);
+    const offset = calculateCardOffset(tempCol, idx);
+    cardEl.style.top = offset + 'px';
+    cardEl.style.zIndex = idx + 200;
+    cardEl.style.animationDelay = (i * 20) + 'ms';
+    colEl.appendChild(cardEl);
+    ghosts.push(cardEl);
+  }
+
+  const totalTime = 500 + (cards.length - 1) * 20 + 60;
+  setTimeout(() => {
+    ghosts.forEach(el => el.remove());
+  }, totalTime);
+}
+
+function animateLastCompletion() {
+  const last = game.history[game.history.length - 1];
+  if (last && last.completedSequence) {
+    animateCompletedSequence(last.completedSequence);
+  }
+}
+
 // === Drag & Drop ===
 function handleDragStart(e) {
   if (autoSolveActive || autoSolvePending) {
@@ -736,6 +786,7 @@ function handleDrop(e) {
   if (result && result.moved) {
     render();
     if (result.completedSequence) {
+      animateLastCompletion();
       showToast('Sequência completa! +100 pontos');
       if (game.checkWin()) {
         handleWin();
@@ -797,6 +848,7 @@ function handleCardClick(colIdx, cardIdx) {
 
 function checkAfterMove(result) {
   if (result.completedSequence) {
+    animateLastCompletion();
     showToast('Sequência completa! +100 pontos');
     if (game.checkWin()) {
       handleWin();
@@ -827,6 +879,7 @@ function dealCards() {
   }
 
   if (result.completions && result.completions.length > 0) {
+    animateLastCompletion();
     showToast('Sequência completa! +100 pontos');
     if (game.checkWin()) {
       handleWin();
@@ -1079,6 +1132,7 @@ function executeSolutionStep(solution, index) {
     }
     render();
     if (result.completions && result.completions.length > 0) {
+      animateLastCompletion();
       showToast('Sequência completa! +100 pontos');
       if (game.checkWin()) {
         stopAutoSolve();
@@ -1095,6 +1149,7 @@ function executeSolutionStep(solution, index) {
     }
     render();
     if (result.completedSequence) {
+      animateLastCompletion();
       showToast('Sequência completa! +100 pontos');
       if (game.checkWin()) {
         stopAutoSolve();
