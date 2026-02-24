@@ -397,6 +397,8 @@ function restartGame() {
   cancelPoolWait(true);
   closeAllModals();
   game.restartGame();
+  document.getElementById('menu-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.remove('hidden');
   render();
   startTimerUpdate();
   showToast('Jogo reiniciado');
