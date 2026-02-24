@@ -491,9 +491,21 @@ function renderTopBar() {
   stockArea.innerHTML = '';
   if (game.stock.length > 0) {
     stockArea.classList.add('has-cards');
+    const visual = document.createElement('div');
+    visual.className = 'stock-visual';
+    for (let i = 0; i < 3; i++) {
+      const card = document.createElement('span');
+      card.className = 'stock-card';
+      visual.appendChild(card);
+    }
+    const label = document.createElement('span');
+    label.className = 'stock-label';
+    label.textContent = 'Distribuir';
     const count = document.createElement('span');
     count.className = 'stock-count';
     count.textContent = Math.ceil(game.stock.length / 10);
+    stockArea.appendChild(visual);
+    stockArea.appendChild(label);
     stockArea.appendChild(count);
   } else {
     stockArea.classList.remove('has-cards');

@@ -54,10 +54,9 @@
         <button class="toolbar-btn" onclick="showMenu()"><span class="tb-icon">☰</span><span class="tb-label">Menu</span></button>
         <button class="toolbar-btn" onclick="confirmNewGame()"><span class="tb-icon">⟳</span><span class="tb-label">Novo</span></button>
         <button class="toolbar-btn" onclick="restartGame()"><span class="tb-icon">↺</span><span class="tb-label">Reiniciar</span></button>
-        <button class="toolbar-btn" onclick="copyGameId()"><span class="tb-icon">#</span><span class="tb-label">Copiar ID</span></button>
         <button class="toolbar-btn" onclick="undoMove()"><span class="tb-icon">↩</span><span class="tb-label">Desfazer</span></button>
+        <button class="toolbar-btn" onclick="showHint()"><span class="tb-icon">?</span><span class="tb-label">Dica</span></button>
       </div>
-      <button class="toolbar-btn" onclick="showHint()"><span class="tb-icon">?</span><span class="tb-label">Dica</span></button>
       <div class="top-bar-center">
         <div class="info-item">
           <span class="info-label">Pontos</span>
@@ -73,6 +72,7 @@
         </div>
       </div>
       <div class="top-bar-right">
+        <button class="toolbar-btn" onclick="copyGameId()"><span class="tb-icon">#</span><span class="tb-label">Copiar ID</span></button>
         <button id="auto-solve-btn" class="toolbar-btn" onclick="autoSolve()"><span class="tb-icon">▶</span><span class="tb-label">Resolver</span></button>
         <div class="completed-area" id="completed-area"></div>
         <div class="stock-area" id="stock-area" onclick="dealCards()" title="Distribuir cartas"></div>
