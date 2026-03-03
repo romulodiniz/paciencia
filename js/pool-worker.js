@@ -107,18 +107,35 @@ function deal(state) {
   }
 }
 
+function hashState(state) {
+  let h = '';
+  for (let c = 0; c < 10; c++) {
+    for (const card of state.tableau[c]) {
+      h += String.fromCharCode(33 + SUIT_KEYS.indexOf(card.suit) * 26 + (card.value - 1) * 2 + (card.faceUp ? 1 : 0));
+    }
+    h += '|';
+  }
+  h += state.stock.length + ',' + state.completed;
+  return h;
+}
+
 function trySolve(cards, trial) {
   const state = createState(cards);
   let seed = trial * 997 + 13;
   let moveCount = 0, noProgress = 0, lastFrom = -1, lastTo = -1;
   const MAX = 1000;
   const moves = [];
+  const visited = new Set();
 
   while (moveCount < MAX && state.completed < 8) {
     const before = state.completed;
     removeSequences(state);
     if (state.completed >= 8) return moves.length;
     if (state.completed > before) noProgress = 0;
+
+    const hash = hashState(state);
+    if (visited.has(hash)) break;
+    visited.add(hash);
 
     let avail = getMoves(state);
 

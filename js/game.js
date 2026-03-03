@@ -1056,6 +1056,7 @@ class SpiderGame {
     let moveCount = 0;
     let noProgressCount = 0;
     let lastFrom = -1, lastTo = -1;
+    const visited = new Set();
 
     while (moveCount < maxMoves && state.completed < 8) {
       const completedBefore = state.completed;
@@ -1063,6 +1064,10 @@ class SpiderGame {
       if (state.completed >= 8) return moves;
       // Sequência completada = progresso real
       if (state.completed > completedBefore) noProgressCount = 0;
+
+      const hash = this._hashState(state);
+      if (visited.has(hash)) break;
+      visited.add(hash);
 
       let availMoves = this._solverGetMoves(state);
 
