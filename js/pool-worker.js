@@ -125,7 +125,8 @@ function trySolve(cards, trial) {
   let moveCount = 0, noProgress = 0, lastFrom = -1, lastTo = -1;
   const MAX = 1000;
   const moves = [];
-  const visited = new Set();
+  const visited = new Map();
+  const MAX_REVISITS = 5;
 
   while (moveCount < MAX && state.completed < 8) {
     const before = state.completed;
@@ -134,8 +135,9 @@ function trySolve(cards, trial) {
     if (state.completed > before) noProgress = 0;
 
     const hash = hashState(state);
-    if (visited.has(hash)) break;
-    visited.add(hash);
+    const visits = (visited.get(hash) || 0) + 1;
+    if (visits > MAX_REVISITS) break;
+    visited.set(hash, visits);
 
     let avail = getMoves(state);
 

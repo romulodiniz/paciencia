@@ -104,7 +104,8 @@ function runSolver(state, trial, maxMoves) {
   let moveCount = 0;
   let noProgressCount = 0;
   let lastFrom = -1, lastTo = -1;
-  const visited = new Set();
+  const visited = new Map();
+  const MAX_REVISITS = 5;
 
   while (moveCount < maxMoves && state.completed < 8) {
     if (cancelRequested) return null;
@@ -115,8 +116,9 @@ function runSolver(state, trial, maxMoves) {
     if (state.completed > completedBefore) noProgressCount = 0;
 
     const hash = hashState(state);
-    if (visited.has(hash)) break;
-    visited.add(hash);
+    const visits = (visited.get(hash) || 0) + 1;
+    if (visits > MAX_REVISITS) break;
+    visited.set(hash, visits);
 
     let availMoves = getMoves(state);
 
@@ -201,7 +203,7 @@ function backtrackMoves(state, maxBranch) {
 function solveWithBacktracking(initialState, timeLimitMs) {
   const deadline = Date.now() + timeLimitMs;
   const visited = new Set();
-  const MAX_BRANCH = 3;
+  const MAX_BRANCH = 4;
 
   removeSequences(initialState);
   if (cancelRequested) return null;
@@ -260,13 +262,13 @@ function solveWithBacktracking(initialState, timeLimitMs) {
   return null;
 }
 
-function findSolution(state, greedyTrials, greedyMaxMoves, backtrackTimeLimitMs) {
-  for (let t = 0; t < greedyTrials; t++) {
+function findSolution(state, greedyTrials, greedyMaxMoves, backtrackTimeLimitMs, trialStart, skipBacktrack) {
+  for (let t = trialStart; t < trialStart + greedyTrials; t++) {
     if (cancelRequested) return null;
     const result = runSolver(copyState(state), t, greedyMaxMoves);
     if (result !== null) return result;
   }
-  if (cancelRequested) return null;
+  if (cancelRequested || skipBacktrack) return null;
   return solveWithBacktracking(copyState(state), backtrackTimeLimitMs);
 }
 
@@ -286,7 +288,9 @@ self.onmessage = function(e) {
       data.state,
       data.greedyTrials || 300,
       data.greedyMaxMoves || 2000,
-      data.backtrackTimeLimitMs || 30000
+      data.backtrackTimeLimitMs || 45000,
+      data.trialStart || 0,
+      data.skipBacktrack || false
     );
 
     if (cancelRequested) {

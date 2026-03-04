@@ -1056,7 +1056,8 @@ class SpiderGame {
     let moveCount = 0;
     let noProgressCount = 0;
     let lastFrom = -1, lastTo = -1;
-    const visited = new Set();
+    const visited = new Map();
+    const MAX_REVISITS = 5;
 
     while (moveCount < maxMoves && state.completed < 8) {
       const completedBefore = state.completed;
@@ -1066,8 +1067,9 @@ class SpiderGame {
       if (state.completed > completedBefore) noProgressCount = 0;
 
       const hash = this._hashState(state);
-      if (visited.has(hash)) break;
-      visited.add(hash);
+      const visits = (visited.get(hash) || 0) + 1;
+      if (visits > MAX_REVISITS) break;
+      visited.set(hash, visits);
 
       let availMoves = this._solverGetMoves(state);
 
@@ -1316,7 +1318,7 @@ class SpiderGame {
   _solveWithBacktracking(initialState, timeLimitMs) {
     const deadline = Date.now() + timeLimitMs;
     const visited = new Set();
-    const MAX_BRANCH = 3;
+    const MAX_BRANCH = 4;
 
     // Preparar estado inicial
     this._solverRemoveSequences(initialState);
@@ -1425,7 +1427,7 @@ class SpiderGame {
       if (result !== null) return result;
     }
 
-    // Fallback: solver DFS com backtracking (mais lento, até 15s)
-    return this._solveWithBacktracking(this._copyCurrentState(), 30000);
+    // Fallback: solver DFS com backtracking (mais lento, até 45s)
+    return this._solveWithBacktracking(this._copyCurrentState(), 45000);
   }
 }
